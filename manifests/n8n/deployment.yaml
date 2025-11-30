@@ -33,12 +33,20 @@ spec:
               value: "5678"
             - name: N8N_LOG_LEVEL
               value: "debug"
+            - name: NODE_EXTRA_CA_CERTS
+              value: "/usr/local/share/ca-certificates/garvey-ca.pem"
           ports:
             - containerPort: 5678
           volumeMounts:
             - name: n8n-data
               mountPath: /home/node/.n8n
+            - name: custom-ca
+              mountPath: /usr/local/share/ca-certificates
+              readOnly: true
       volumes:
         - name: n8n-data
           persistentVolumeClaim:
             claimName: n8n-data
+        - name: custom-ca
+          configMap:
+            name: n8n-custom-ca
