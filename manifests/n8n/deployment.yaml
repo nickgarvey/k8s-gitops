@@ -27,6 +27,8 @@ spec:
         - name: n8n
           image: n8nio/n8n
           env:
+            - name: N8N_DIAGNOSTICS_ENABLED
+              value: "false"
             - name: N8N_RUNNERS_ENABLED
               value: "true"
             - name: N8N_PORT
