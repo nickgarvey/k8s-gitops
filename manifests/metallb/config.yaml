@@ -1,0 +1,36 @@
+# MetalLB Configuration
+# Apply AFTER installing MetalLB from official manifests
+#
+# Install MetalLB first:
+#   kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.9/config/manifests/metallb-native.yaml
+#
+# Then apply this config:
+#   kubectl apply -f config.yaml
+
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: default-pool
+  namespace: metallb-system
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  # Network: 10.28.0.0/20 (10.28.0.0 - 10.28.15.255)
+  # DHCP range: 10.28.3.42 - 10.28.12.198
+  # VIP range: 10.28.15.240 - 10.28.15.250 (outside DHCP, top of subnet)
+  addresses:
+    - 10.28.15.240-10.28.15.250
+
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: default-l2
+  namespace: metallb-system
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  ipAddressPools:
+    - default-pool
+
