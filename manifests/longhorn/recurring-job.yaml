@@ -1,0 +1,14 @@
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: backup-daily
+  namespace: longhorn-system
+spec:
+  task: "backup"
+  cron: "30 02 * * *"     # 02:30 UTC; adjust for your desired local time
+  retain: 14              # keep last 14 backups per volume
+  concurrency: 2          # parallelism across volumes
+  groups:
+    - all-volumes
+  parameters:
+    full-backup-interval: "6"  # optional; keep periodic full backups
