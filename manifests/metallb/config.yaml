@@ -18,9 +18,10 @@ metadata:
 spec:
   # Network: 10.28.0.0/20 (10.28.0.0 - 10.28.15.255)
   # DHCP range: 10.28.3.42 - 10.28.12.198
-  # VIP range: 10.28.15.240 - 10.28.15.250 (outside DHCP, top of subnet)
+  # Static IPs: 10.28.15.1 - 10.28.15.199 (nodes, servers, etc.)
+  # MetalLB VIPs: 10.28.15.200 - 10.28.15.250 (51 IPs for LoadBalancers)
   addresses:
-    - 10.28.15.240-10.28.15.250
+    - 10.28.15.200-10.28.15.250
 
 ---
 apiVersion: metallb.io/v1beta1

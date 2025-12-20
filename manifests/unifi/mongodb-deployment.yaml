@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unifi-mongodb
+  namespace: unifi
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unifi-mongodb
+  template:
+    metadata:
+      labels:
+        app: unifi-mongodb
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:4.4
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: mongodb-data
+              mountPath: /data/db
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: unifi-mongodb-secret
+                  key: mongo-root-username
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: unifi-mongodb-secret
+                  key: mongo-root-password
+      volumes:
+        - name: mongodb-data
+          persistentVolumeClaim:
+            claimName: unifi-mongodb
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifi-mongodb
+  namespace: unifi
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  selector:
+    app: unifi-mongodb
+  ports:
+    - protocol: TCP
+      port: 27017
+      targetPort: 27017
+  type: ClusterIP
+

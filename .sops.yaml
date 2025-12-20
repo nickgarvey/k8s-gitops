@@ -1,0 +1,11 @@
+keys:
+  - &ngarvey age1nyxjtps38j4p52nmwtf96h7d9mege90ftf4xcpxppctcwq5huqys4hy5k0
+  - &k8s-operator age1zd28lg5yxxc06jnyym92fep4gdwwnk3k3my9l247pvskjdj8mv4sa89d08
+creation_rules:
+  - path_regex: manifests/.*/secret\.yaml$
+    # Only encrypt values under stringData and data keys
+    encrypted_regex: "^(data|stringData)$"
+    key_groups:
+    - age:
+      - *ngarvey
+      - *k8s-operator

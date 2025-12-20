@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unifi-network-application
+  namespace: unifi
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unifi-network-application
+  template:
+    metadata:
+      labels:
+        app: unifi-network-application
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      containers:
+        - name: unifi-network-application
+          image: lscr.io/linuxserver/unifi-network-application:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: "America/New_York"
+            - name: MONGO_USER
+              valueFrom:
+                secretKeyRef:
+                  name: unifi-mongodb-secret
+                  key: mongo-root-username
+            - name: MONGO_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: unifi-mongodb-secret
+                  key: mongo-root-password
+            - name: MONGO_HOST
+              value: "unifi-mongodb"
+            - name: MONGO_PORT
+              value: "27017"
+            - name: MONGO_DBNAME
+              value: "unifi"
+            - name: MONGO_AUTHSOURCE
+              value: "admin"
+          ports:
+            - containerPort: 8443
+              name: web-https
+            - containerPort: 8080
+              name: device-comm
+            - containerPort: 3478
+              protocol: UDP
+              name: stun
+            - containerPort: 10001
+              protocol: UDP
+              name: ap-discovery
+            - containerPort: 6789
+              name: speed-test
+          volumeMounts:
+            - name: unifi-config
+              mountPath: /config
+      volumes:
+        - name: unifi-config
+          persistentVolumeClaim:
+            claimName: unifi-config
+
