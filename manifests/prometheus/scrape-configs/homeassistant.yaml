@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: homeassistant
+  namespace: prometheus
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  staticConfigs:
+    - targets:
+        - homeassistant.home.arpa:8123
+      labels:
+        job: homeassistant
+  scheme: HTTPS
+  metricsPath: /api/prometheus
+  tlsConfig:
+    insecureSkipVerify: true
