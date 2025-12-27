@@ -51,3 +51,14 @@ spec:
   # Enable admin API for lifecycle management
   enableAdminAPI: true
 
+  # AlertManager configuration
+  alerting:
+    alertmanagers:
+      - namespace: prometheus
+        name: alertmanager
+        port: web
+
+  # Select all PrometheusRules across all namespaces
+  ruleSelector: {}
+  ruleNamespaceSelector: {}
+
