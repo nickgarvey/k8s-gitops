@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llama-cpp-config
+  namespace: llama-cpp
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+data:
+  # HuggingFace model repo (e.g., "ggml-org/gpt-oss-120b-GGUF" or "bartowski/Llama-3.2-1B-Instruct-GGUF")
+  MODEL_REPO: "ggml-org/gpt-oss-120b-GGUF"
+
+  # Optional: filter pattern to select specific quantization (e.g., "Q4_K_M", "mxfp4", "Q8_0")
+  # Leave empty to download all GGUF files in the repo
+  MODEL_FILTER: "mxfp4"

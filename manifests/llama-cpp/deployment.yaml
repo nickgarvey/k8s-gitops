@@ -1,0 +1,152 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-cpp
+  namespace: llama-cpp
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llama-cpp
+  template:
+    metadata:
+      labels:
+        app: llama-cpp
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: framework
+      initContainers:
+        - name: download-model
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              apk add --no-cache curl jq
+
+              # Extract repo name for directory
+              REPO_NAME=$(echo "$MODEL_REPO" | sed 's|.*/||')
+              MODEL_DIR="/models/$REPO_NAME"
+              mkdir -p "$MODEL_DIR"
+
+              echo "Fetching file list from HuggingFace: $MODEL_REPO"
+              FILES_JSON=$(curl -s "https://huggingface.co/api/models/$MODEL_REPO/tree/main")
+
+              # Filter for GGUF files, optionally matching MODEL_FILTER
+              if [ -n "$MODEL_FILTER" ]; then
+                echo "Filtering for pattern: $MODEL_FILTER"
+                GGUF_FILES=$(echo "$FILES_JSON" | jq -r --arg filter "$MODEL_FILTER" \
+                  '.[] | select(.path | test("\\.gguf$"; "i")) | select(.path | test($filter; "i")) | "\(.path)|\(.size)"')
+              else
+                GGUF_FILES=$(echo "$FILES_JSON" | jq -r \
+                  '.[] | select(.path | test("\\.gguf$"; "i")) | "\(.path)|\(.size)"')
+              fi
+
+              if [ -z "$GGUF_FILES" ]; then
+                echo "ERROR: No GGUF files found matching filter '$MODEL_FILTER' in $MODEL_REPO"
+                exit 1
+              fi
+
+              echo "Found GGUF files:"
+              echo "$GGUF_FILES" | while IFS='|' read -r filename expected_size; do
+                echo "  - $filename ($expected_size bytes)"
+              done
+
+              # Download each file if missing or wrong size
+              FIRST_FILE=""
+              echo "$GGUF_FILES" | while IFS='|' read -r filename expected_size; do
+                filepath="$MODEL_DIR/$filename"
+
+                # Track first file for model path
+                if [ -z "$FIRST_FILE" ]; then
+                  FIRST_FILE="$filepath"
+                  echo "$filepath" > /models/.model_path
+                fi
+
+                if [ -f "$filepath" ]; then
+                  actual_size=$(stat -c%s "$filepath" 2>/dev/null || stat -f%z "$filepath" 2>/dev/null || echo "0")
+                  if [ "$actual_size" = "$expected_size" ]; then
+                    echo "✓ $filename exists with correct size ($actual_size bytes), skipping"
+                    continue
+                  else
+                    echo "✗ $filename exists but size mismatch (got $actual_size, expected $expected_size), re-downloading"
+                  fi
+                fi
+
+                echo "Downloading $filename ($expected_size bytes)..."
+                curl -L -o "$filepath" "https://huggingface.co/$MODEL_REPO/resolve/main/$filename"
+
+                # Verify download
+                actual_size=$(stat -c%s "$filepath" 2>/dev/null || stat -f%z "$filepath" 2>/dev/null || echo "0")
+                if [ "$actual_size" != "$expected_size" ]; then
+                  echo "WARNING: Downloaded size ($actual_size) doesn't match expected ($expected_size)"
+                fi
+              done
+
+              # Write model path for main container (use first file alphabetically for split models)
+              FIRST_GGUF=$(echo "$GGUF_FILES" | head -1 | cut -d'|' -f1)
+              echo "$MODEL_DIR/$FIRST_GGUF" > /models/.model_path
+              echo "Model path: $(cat /models/.model_path)"
+              echo "Download complete"
+          env:
+            - name: MODEL_REPO
+              valueFrom:
+                configMapKeyRef:
+                  name: llama-cpp-config
+                  key: MODEL_REPO
+            - name: MODEL_FILTER
+              valueFrom:
+                configMapKeyRef:
+                  name: llama-cpp-config
+                  key: MODEL_FILTER
+                  optional: true
+          volumeMounts:
+            - name: models
+              mountPath: /models
+      containers:
+        - name: llama-server
+          image: zot.home.arpa:5000/llama-cpp-vulkan-ngarvey:latest
+          command:
+            - "/bin/sh"
+            - "-c"
+            - |
+              MODEL_PATH=$(cat /models/.model_path)
+              echo "Loading model: $MODEL_PATH"
+              exec /bin/llama-server \
+                --host 0.0.0.0 \
+                --port 8080 \
+                --model "$MODEL_PATH" \
+                --n-gpu-layers 99 \
+                --ctx-size 32768
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            - name: models
+              mountPath: /models
+            - name: dri
+              mountPath: /dev/dri
+          securityContext:
+            privileged: true
+          env:
+            - name: VK_ICD_FILENAMES
+              value: "/share/vulkan/icd.d/radeon_icd.x86_64.json"
+      volumes:
+        - name: models
+          hostPath:
+            path: /var/lib/rancher/k3s/storage/llama-cpp-models
+            type: DirectoryOrCreate
+        - name: dri
+          hostPath:
+            path: /dev/dri
+            type: Directory
