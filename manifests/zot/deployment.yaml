@@ -7,6 +7,8 @@ metadata:
     app.kubernetes.io/managed-by: ngarvey-homelab
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: zot
