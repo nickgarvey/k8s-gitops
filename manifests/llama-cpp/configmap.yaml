@@ -11,4 +11,5 @@ data:
 
   # Optional: filter pattern to select specific quantization (e.g., "Q4_K_M", "mxfp4", "Q8_0")
   # Leave empty to download all GGUF files in the repo
+  # Using mxfp4 as recommended - gpt-oss models are natively trained in this format
   MODEL_FILTER: "mxfp4"

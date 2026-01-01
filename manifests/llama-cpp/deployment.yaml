@@ -121,7 +121,12 @@ spec:
                 --port 8080 \
                 --model "$MODEL_PATH" \
                 --n-gpu-layers 99 \
-                --ctx-size 32768
+                --ctx-size 32768 \
+                --metrics \
+                --flash-attn on \
+                --batch-size 4096 \
+                --ubatch-size 512 \
+                --jinja
           ports:
             - containerPort: 8080
           livenessProbe:
