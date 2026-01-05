@@ -116,17 +116,16 @@ spec:
             - |
               MODEL_PATH=$(cat /models/.model_path)
               echo "Loading model: $MODEL_PATH"
-              exec /bin/llama-server \
-                --host 0.0.0.0 \
-                --port 8080 \
-                --model "$MODEL_PATH" \
-                --n-gpu-layers 99 \
-                --ctx-size 32768 \
-                --metrics \
-                --flash-attn on \
-                --batch-size 4096 \
-                --ubatch-size 512 \
-                --jinja
+
+              # Build args from LLAMA_ARGS configmap
+              ARGS="--model $MODEL_PATH"
+              if [ -n "$LLAMA_ARGS" ]; then
+                # Convert newline-separated args to space-separated
+                ARGS="$ARGS $(echo "$LLAMA_ARGS" | tr '\n' ' ')"
+              fi
+
+              echo "Starting llama-server with args: $ARGS"
+              exec /bin/llama-server $ARGS
           ports:
             - containerPort: 8080
           livenessProbe:
@@ -146,6 +145,11 @@ spec:
           env:
             - name: VK_ICD_FILENAMES
               value: "/share/vulkan/icd.d/radeon_icd.x86_64.json"
+            - name: LLAMA_ARGS
+              valueFrom:
+                configMapKeyRef:
+                  name: llama-cpp-config
+                  key: LLAMA_ARGS
       volumes:
         - name: models
           hostPath:
