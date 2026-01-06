@@ -34,16 +34,28 @@ spec:
               mkdir -p "$MODEL_DIR"
 
               echo "Fetching file list from HuggingFace: $MODEL_REPO"
-              FILES_JSON=$(curl -s "https://huggingface.co/api/models/$MODEL_REPO/tree/main")
 
-              # Filter for GGUF files, optionally matching MODEL_FILTER
+              # If MODEL_FILTER is set, try to fetch from that subdirectory first
               if [ -n "$MODEL_FILTER" ]; then
-                echo "Filtering for pattern: $MODEL_FILTER"
-                GGUF_FILES=$(echo "$FILES_JSON" | jq -r --arg filter "$MODEL_FILTER" \
-                  '.[] | select(.path | test("\\.gguf$"; "i")) | select(.path | test($filter; "i")) | "\(.path)|\(.size)"')
-              else
-                GGUF_FILES=$(echo "$FILES_JSON" | jq -r \
-                  '.[] | select(.path | test("\\.gguf$"; "i")) | "\(.path)|\(.size)"')
+                echo "Checking for files in subdirectory: $MODEL_FILTER"
+                SUBDIR_JSON=$(curl -s "https://huggingface.co/api/models/$MODEL_REPO/tree/main/$MODEL_FILTER")
+                GGUF_FILES=$(echo "$SUBDIR_JSON" | jq -r \
+                  '.[] | select(.path | test("\\.gguf$"; "i")) | "\(.path)|\(.size)"' 2>/dev/null || echo "")
+              fi
+
+              # If no files found in subdirectory, search root level with filter
+              if [ -z "$GGUF_FILES" ]; then
+                echo "Fetching file list from root directory"
+                FILES_JSON=$(curl -s "https://huggingface.co/api/models/$MODEL_REPO/tree/main")
+
+                if [ -n "$MODEL_FILTER" ]; then
+                  echo "Filtering for pattern: $MODEL_FILTER"
+                  GGUF_FILES=$(echo "$FILES_JSON" | jq -r --arg filter "$MODEL_FILTER" \
+                    '.[] | select(.path | test("\\.gguf$"; "i")) | select(.path | test($filter; "i")) | "\(.path)|\(.size)"')
+                else
+                  GGUF_FILES=$(echo "$FILES_JSON" | jq -r \
+                    '.[] | select(.path | test("\\.gguf$"; "i")) | "\(.path)|\(.size)"')
+                fi
               fi
 
               if [ -z "$GGUF_FILES" ]; then
@@ -58,30 +70,35 @@ spec:
 
               # Download each file if missing or wrong size
               FIRST_FILE=""
-              echo "$GGUF_FILES" | while IFS='|' read -r filename expected_size; do
-                filepath="$MODEL_DIR/$filename"
+              echo "$GGUF_FILES" | while IFS='|' read -r filepath expected_size; do
+                # filepath already includes subdirectory if present (e.g., "Q8_0/file.gguf")
+                full_path="$MODEL_DIR/$filepath"
+                file_dir=$(dirname "$full_path")
+
+                # Create subdirectory if needed
+                mkdir -p "$file_dir"
 
                 # Track first file for model path
                 if [ -z "$FIRST_FILE" ]; then
-                  FIRST_FILE="$filepath"
-                  echo "$filepath" > /models/.model_path
+                  FIRST_FILE="$full_path"
+                  echo "$full_path" > /models/.model_path
                 fi
 
-                if [ -f "$filepath" ]; then
-                  actual_size=$(stat -c%s "$filepath" 2>/dev/null || stat -f%z "$filepath" 2>/dev/null || echo "0")
+                if [ -f "$full_path" ]; then
+                  actual_size=$(stat -c%s "$full_path" 2>/dev/null || stat -f%z "$full_path" 2>/dev/null || echo "0")
                   if [ "$actual_size" = "$expected_size" ]; then
-                    echo "✓ $filename exists with correct size ($actual_size bytes), skipping"
+                    echo "✓ $filepath exists with correct size ($actual_size bytes), skipping"
                     continue
                   else
-                    echo "✗ $filename exists but size mismatch (got $actual_size, expected $expected_size), re-downloading"
+                    echo "✗ $filepath exists but size mismatch (got $actual_size, expected $expected_size), re-downloading"
                   fi
                 fi
 
-                echo "Downloading $filename ($expected_size bytes)..."
-                curl -L -o "$filepath" "https://huggingface.co/$MODEL_REPO/resolve/main/$filename"
+                echo "Downloading $filepath ($expected_size bytes)..."
+                curl -L -o "$full_path" "https://huggingface.co/$MODEL_REPO/resolve/main/$filepath"
 
                 # Verify download
-                actual_size=$(stat -c%s "$filepath" 2>/dev/null || stat -f%z "$filepath" 2>/dev/null || echo "0")
+                actual_size=$(stat -c%s "$full_path" 2>/dev/null || stat -f%z "$full_path" 2>/dev/null || echo "0")
                 if [ "$actual_size" != "$expected_size" ]; then
                   echo "WARNING: Downloaded size ($actual_size) doesn't match expected ($expected_size)"
                 fi
