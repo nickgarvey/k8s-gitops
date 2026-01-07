@@ -11,14 +11,14 @@ data:
 
   # Optional: filter pattern to select specific quantization (e.g., "Q4_K_M", "mxfp4", "Q8_0")
   # Leave empty to download all GGUF files in the repo
-  MODEL_FILTER: "Q8_0"
+  MODEL_FILTER: "Q5_K_M"
 
   # llama-server arguments (one per line, will be passed as command-line args)
   LLAMA_ARGS: |
     --host 0.0.0.0
     --port 8080
     --n-gpu-layers 99
-    --ctx-size 32768
+    --ctx-size 65536
     --metrics
     --batch-size 4096
     --ubatch-size 512
