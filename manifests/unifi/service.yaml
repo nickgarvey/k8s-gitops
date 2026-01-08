@@ -55,6 +55,7 @@ metadata:
     app.kubernetes.io/managed-by: ngarvey-homelab
 spec:
   type: LoadBalancer
+  loadBalancerIP: 10.28.15.203
   selector:
     app: unifi-network-application
   ports:
