@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qwen-vl-config
+  namespace: qwen-vl
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+data:
+  # HuggingFace model repo
+  MODEL_REPO: "unsloth/Qwen3-VL-30B-A3B-Thinking-GGUF"
+
+  # Optional: filter pattern to select specific quantization
+  MODEL_FILTER: "Q5_K_M"
+
+  # llama-server arguments (one per line, will be passed as command-line args)
+  LLAMA_ARGS: |
+    --host 0.0.0.0
+    --port 8080
+    --n-gpu-layers 99
+    --ctx-size 65536
+    --metrics
+    --batch-size 4096
+    --ubatch-size 512
+    --jinja
+    --image-min-tokens 1024

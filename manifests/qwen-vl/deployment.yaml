@@ -1,0 +1,202 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qwen-vl
+  namespace: qwen-vl
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qwen-vl
+  template:
+    metadata:
+      labels:
+        app: qwen-vl
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: framework
+      initContainers:
+        - name: download-model
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              apk add --no-cache curl jq
+
+              # Extract repo name for directory
+              REPO_NAME=$(echo "$MODEL_REPO" | sed 's|.*/||')
+              MODEL_DIR="/models/$REPO_NAME"
+              mkdir -p "$MODEL_DIR"
+
+              echo "Fetching file list from HuggingFace: $MODEL_REPO"
+
+              # If MODEL_FILTER is set, try to fetch from that subdirectory first
+              if [ -n "$MODEL_FILTER" ]; then
+                echo "Checking for files in subdirectory: $MODEL_FILTER"
+                SUBDIR_JSON=$(curl -s "https://huggingface.co/api/models/$MODEL_REPO/tree/main/$MODEL_FILTER")
+                GGUF_FILES=$(echo "$SUBDIR_JSON" | jq -r \
+                  '.[] | select(.path | test("\\.gguf$"; "i")) | "\(.path)|\(.size)"' 2>/dev/null || echo "")
+              fi
+
+              # If no files found in subdirectory, search root level with filter
+              if [ -z "$GGUF_FILES" ]; then
+                echo "Fetching file list from root directory"
+                FILES_JSON=$(curl -s "https://huggingface.co/api/models/$MODEL_REPO/tree/main")
+
+                if [ -n "$MODEL_FILTER" ]; then
+                  echo "Filtering for pattern: $MODEL_FILTER"
+                  GGUF_FILES=$(echo "$FILES_JSON" | jq -r --arg filter "$MODEL_FILTER" \
+                    '.[] | select(.path | test("\\.gguf$"; "i")) | select(.path | test($filter; "i")) | "\(.path)|\(.size)"')
+                else
+                  GGUF_FILES=$(echo "$FILES_JSON" | jq -r \
+                    '.[] | select(.path | test("\\.gguf$"; "i")) | "\(.path)|\(.size)"')
+                fi
+              fi
+
+              if [ -z "$GGUF_FILES" ]; then
+                echo "ERROR: No GGUF files found matching filter '$MODEL_FILTER' in $MODEL_REPO"
+                exit 1
+              fi
+
+              echo "Found GGUF files:"
+              echo "$GGUF_FILES" | while IFS='|' read -r filename expected_size; do
+                echo "  - $filename ($expected_size bytes)"
+              done
+
+              # Download each file if missing or wrong size
+              FIRST_FILE=""
+              echo "$GGUF_FILES" | while IFS='|' read -r filepath expected_size; do
+                # filepath already includes subdirectory if present (e.g., "Q8_0/file.gguf")
+                full_path="$MODEL_DIR/$filepath"
+                file_dir=$(dirname "$full_path")
+
+                # Create subdirectory if needed
+                mkdir -p "$file_dir"
+
+                # Track first file for model path
+                if [ -z "$FIRST_FILE" ]; then
+                  FIRST_FILE="$full_path"
+                  echo "$full_path" > /models/.model_path
+                fi
+
+                if [ -f "$full_path" ]; then
+                  actual_size=$(stat -c%s "$full_path" 2>/dev/null || stat -f%z "$full_path" 2>/dev/null || echo "0")
+                  if [ "$actual_size" = "$expected_size" ]; then
+                    echo "✓ $filepath exists with correct size ($actual_size bytes), skipping"
+                    continue
+                  else
+                    echo "✗ $filepath exists but size mismatch (got $actual_size, expected $expected_size), re-downloading"
+                  fi
+                fi
+
+                echo "Downloading $filepath ($expected_size bytes)..."
+                curl -L -o "$full_path" "https://huggingface.co/$MODEL_REPO/resolve/main/$filepath"
+
+                # Verify download
+                actual_size=$(stat -c%s "$full_path" 2>/dev/null || stat -f%z "$full_path" 2>/dev/null || echo "0")
+                if [ "$actual_size" != "$expected_size" ]; then
+                  echo "WARNING: Downloaded size ($actual_size) doesn't match expected ($expected_size)"
+                fi
+              done
+
+              # Write model path for main container (use first file alphabetically for split models)
+              FIRST_GGUF=$(echo "$GGUF_FILES" | head -1 | cut -d'|' -f1)
+              echo "$MODEL_DIR/$FIRST_GGUF" > /models/.model_path
+              echo "Model path: $(cat /models/.model_path)"
+
+              # Download mmproj file for vision support
+              echo "Downloading mmproj file for vision support..."
+              MMPROJ_FILE="mmproj-F16.gguf"
+              MMPROJ_PATH="$MODEL_DIR/$MMPROJ_FILE"
+              MMPROJ_SIZE=1083500224
+
+              if [ -f "$MMPROJ_PATH" ]; then
+                actual_size=$(stat -c%s "$MMPROJ_PATH" 2>/dev/null || stat -f%z "$MMPROJ_PATH" 2>/dev/null || echo "0")
+                if [ "$actual_size" = "$MMPROJ_SIZE" ]; then
+                  echo "✓ $MMPROJ_FILE exists with correct size, skipping"
+                else
+                  echo "✗ $MMPROJ_FILE size mismatch, re-downloading"
+                  curl -L -o "$MMPROJ_PATH" "https://huggingface.co/$MODEL_REPO/resolve/main/$MMPROJ_FILE"
+                fi
+              else
+                echo "Downloading $MMPROJ_FILE ($MMPROJ_SIZE bytes)..."
+                curl -L -o "$MMPROJ_PATH" "https://huggingface.co/$MODEL_REPO/resolve/main/$MMPROJ_FILE"
+              fi
+
+              echo "$MMPROJ_PATH" > /models/.mmproj_path
+              echo "Mmproj path: $(cat /models/.mmproj_path)"
+              echo "Download complete"
+          env:
+            - name: MODEL_REPO
+              valueFrom:
+                configMapKeyRef:
+                  name: qwen-vl-config
+                  key: MODEL_REPO
+            - name: MODEL_FILTER
+              valueFrom:
+                configMapKeyRef:
+                  name: qwen-vl-config
+                  key: MODEL_FILTER
+                  optional: true
+          volumeMounts:
+            - name: models
+              mountPath: /models
+      containers:
+        - name: llama-server
+          image: zot.home.arpa:5000/llama-cpp-vulkan-ngarvey:latest
+          command:
+            - "/bin/sh"
+            - "-c"
+            - |
+              MODEL_PATH=$(cat /models/.model_path)
+              MMPROJ_PATH=$(cat /models/.mmproj_path)
+              echo "Loading model: $MODEL_PATH"
+              echo "Loading mmproj: $MMPROJ_PATH"
+
+              # Build args from LLAMA_ARGS configmap
+              ARGS="--model $MODEL_PATH --mmproj $MMPROJ_PATH"
+              if [ -n "$LLAMA_ARGS" ]; then
+                # Convert newline-separated args to space-separated
+                ARGS="$ARGS $(echo "$LLAMA_ARGS" | tr '\n' ' ')"
+              fi
+
+              echo "Starting llama-server with args: $ARGS"
+              exec /bin/llama-server $ARGS
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            - name: models
+              mountPath: /models
+            - name: dri
+              mountPath: /dev/dri
+          securityContext:
+            privileged: true
+          env:
+            - name: VK_ICD_FILENAMES
+              value: "/share/vulkan/icd.d/radeon_icd.x86_64.json"
+            - name: LLAMA_ARGS
+              valueFrom:
+                configMapKeyRef:
+                  name: qwen-vl-config
+                  key: LLAMA_ARGS
+      volumes:
+        - name: models
+          hostPath:
+            path: /var/lib/rancher/k3s/storage/qwen-vl-models
+            type: DirectoryOrCreate
+        - name: dri
+          hostPath:
+            path: /dev/dri
+            type: Directory
