@@ -67,3 +67,32 @@ MetalLB is configured to allocate LoadBalancer IPs from `10.28.15.200 - 10.28.15
 
 Configuration: `manifests/metallb/config.yaml`
 
+---
+
+# Container Registry (zot)
+
+Registry: `zot.home.arpa:5000`
+
+## Quick Commands
+
+List all repositories:
+```bash
+curl -s http://zot.home.arpa:5000/v2/_catalog | jq
+```
+
+List tags (requires skopeo from nix environment):
+```bash
+nix develop --command skopeo list-tags docker://zot.home.arpa:5000/<repo> --tls-verify=false
+```
+
+Pull with podman:
+```bash
+podman pull zot.home.arpa:5000/<repo>:<tag> --tls-verify=false
+```
+
+Push with podman:
+```bash
+podman tag <image>:<tag> zot.home.arpa:5000/<repo>:<tag>
+podman push zot.home.arpa:5000/<repo>:<tag> --tls-verify=false
+```
+
