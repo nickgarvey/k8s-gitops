@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pocket-tts
+  namespace: pocket-tts
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pocket-tts
+  template:
+    metadata:
+      labels:
+        app: pocket-tts
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: framework
+      containers:
+        - name: pocket-tts
+          image: zot.home.arpa:5000/pocket-tts:latest
+          ports:
+            - containerPort: 8000
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "2000m"
+      volumes:
+        - name: data
+          hostPath:
+            path: /var/lib/rancher/k3s/storage/pocket-tts-data
+            type: DirectoryOrCreate
