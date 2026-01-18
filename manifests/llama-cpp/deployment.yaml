@@ -20,168 +20,10 @@ spec:
         kubernetes.io/hostname: framework
       initContainers:
         - name: download-models
-          image: alpine:latest
+          image: python:3.12-alpine
           command:
-            - sh
-            - -c
-            - |
-              set -e
-              apk add --no-cache curl jq
-
-              # Parse models configuration from JSON
-              echo "Parsing models configuration..."
-              MODELS_JSON="$MODELS_CONFIG"
-
-              # Create models directory
-              mkdir -p /models
-
-              # Process each model from the configuration
-              echo "$MODELS_JSON" | jq -c '.[]' | while read -r model_config; do
-                MODEL_NAME=$(echo "$model_config" | jq -r '.name')
-                MODEL_REPO=$(echo "$model_config" | jq -r '.repo')
-                MODEL_FILTER=$(echo "$model_config" | jq -r '.filter')
-                MMPROJ_FILE=$(echo "$model_config" | jq -r '.mmproj')
-
-                echo "========================================="
-                echo "Processing model: $MODEL_NAME"
-                echo "Repo: $MODEL_REPO"
-                echo "Filter: $MODEL_FILTER"
-                echo "========================================="
-
-                # Extract repo name for directory
-                REPO_NAME=$(echo "$MODEL_REPO" | sed 's|.*/||')
-                MODEL_DIR="/models/$MODEL_NAME"
-
-                # Check if model directory already exists with GGUF files
-                if [ -e "$MODEL_DIR" ]; then
-                  if [ -d "$MODEL_DIR" ]; then
-                    echo "Model directory $MODEL_DIR already exists, checking for GGUF files..."
-                    EXISTING_GGUFS=$(find "$MODEL_DIR" -name "*.gguf" -type f 2>/dev/null | head -1)
-                    if [ -n "$EXISTING_GGUFS" ]; then
-                      echo "✓ Model $MODEL_NAME already downloaded, skipping"
-                      continue
-                    else
-                      echo "Model directory exists but no GGUF files found, will download"
-                    fi
-                  else
-                    echo "Removing non-directory entry at $MODEL_DIR"
-                    rm -f "$MODEL_DIR"
-                  fi
-                fi
-
-                mkdir -p "$MODEL_DIR"
-
-                echo "Fetching file list from HuggingFace: $MODEL_REPO"
-
-                # If MODEL_FILTER is set, try to fetch from that subdirectory first
-                if [ -n "$MODEL_FILTER" ] && [ "$MODEL_FILTER" != "null" ]; then
-                  echo "Checking for files in subdirectory: $MODEL_FILTER"
-                  SUBDIR_JSON=$(curl -s "https://huggingface.co/api/models/$MODEL_REPO/tree/main/$MODEL_FILTER")
-                  GGUF_FILES=$(echo "$SUBDIR_JSON" | jq -r \
-                    '.[] | select(.path | test("\\.gguf$"; "i")) | "\(.path)|\(.size)"' 2>/dev/null || echo "")
-                fi
-
-                # If no files found in subdirectory, search root level with filter
-                if [ -z "$GGUF_FILES" ]; then
-                  echo "Fetching file list from root directory"
-                  FILES_JSON=$(curl -s "https://huggingface.co/api/models/$MODEL_REPO/tree/main")
-
-                  if [ -n "$MODEL_FILTER" ] && [ "$MODEL_FILTER" != "null" ]; then
-                    echo "Filtering for pattern: $MODEL_FILTER"
-                    GGUF_FILES=$(echo "$FILES_JSON" | jq -r --arg filter "$MODEL_FILTER" \
-                      '.[] | select(.path | test("\\.gguf$"; "i")) | select(.path | test($filter; "i")) | "\(.path)|\(.size)"')
-                  else
-                    GGUF_FILES=$(echo "$FILES_JSON" | jq -r \
-                      '.[] | select(.path | test("\\.gguf$"; "i")) | "\(.path)|\(.size)"')
-                  fi
-                fi
-
-                if [ -z "$GGUF_FILES" ]; then
-                  echo "ERROR: No GGUF files found matching filter '$MODEL_FILTER' in $MODEL_REPO"
-                  exit 1
-                fi
-
-                echo "Found GGUF files:"
-                echo "$GGUF_FILES" | while IFS='|' read -r filename expected_size; do
-                  echo "  - $filename ($expected_size bytes)"
-                done
-
-                # Download each file if missing or wrong size
-                FIRST_FILE=""
-                echo "$GGUF_FILES" | while IFS='|' read -r filepath expected_size; do
-                  # filepath already includes subdirectory if present (e.g., "Q8_0/file.gguf")
-                  full_path="$MODEL_DIR/$filepath"
-                  file_dir=$(dirname "$full_path")
-
-                  # Create subdirectory if needed
-                  mkdir -p "$file_dir"
-
-                  # Track first file for model path
-                  if [ -z "$FIRST_FILE" ]; then
-                    FIRST_FILE="$full_path"
-                  fi
-
-                  if [ -f "$full_path" ]; then
-                    actual_size=$(stat -c%s "$full_path" 2>/dev/null || stat -f%z "$full_path" 2>/dev/null || echo "0")
-                    if [ "$actual_size" = "$expected_size" ]; then
-                      echo "✓ $filepath exists with correct size ($actual_size bytes), skipping"
-                      continue
-                    else
-                      echo "✗ $filepath exists but size mismatch (got $actual_size, expected $expected_size), re-downloading"
-                    fi
-                  fi
-
-                  echo "Downloading $filepath ($expected_size bytes)..."
-                  curl -L -o "$full_path" "https://huggingface.co/$MODEL_REPO/resolve/main/$filepath"
-
-                  # Verify download
-                  actual_size=$(stat -c%s "$full_path" 2>/dev/null || stat -f%z "$full_path" 2>/dev/null || echo "0")
-                  if [ "$actual_size" != "$expected_size" ]; then
-                    echo "WARNING: Downloaded size ($actual_size) doesn't match expected ($expected_size)"
-                  fi
-                done
-
-                # Write model path for router mode
-                FIRST_GGUF=$(echo "$GGUF_FILES" | head -1 | cut -d'|' -f1)
-                MODEL_PATH="$MODEL_DIR/$FIRST_GGUF"
-                echo "$MODEL_PATH" > "$MODEL_DIR/.model_path"
-                echo "Model path: $MODEL_PATH"
-
-                # Download mmproj file for vision support if specified
-                if [ -n "$MMPROJ_FILE" ] && [ "$MMPROJ_FILE" != "null" ] && [ "$MMPROJ_FILE" != "" ]; then
-                  echo "Downloading mmproj file for vision support..."
-                  MMPROJ_PATH="$MODEL_DIR/$MMPROJ_FILE"
-
-                  # Get expected size from API
-                  MMPROJ_INFO=$(curl -s "https://huggingface.co/api/models/$MODEL_REPO/tree/main" | \
-                    jq -r --arg file "$MMPROJ_FILE" '.[] | select(.path == $file) | .size')
-
-                  if [ -n "$MMPROJ_INFO" ] && [ "$MMPROJ_INFO" != "null" ]; then
-                    MMPROJ_SIZE="$MMPROJ_INFO"
-
-                    if [ -f "$MMPROJ_PATH" ]; then
-                      actual_size=$(stat -c%s "$MMPROJ_PATH" 2>/dev/null || stat -f%z "$MMPROJ_PATH" 2>/dev/null || echo "0")
-                      if [ "$actual_size" = "$MMPROJ_SIZE" ]; then
-                        echo "✓ $MMPROJ_FILE exists with correct size, skipping"
-                      else
-                        echo "✗ $MMPROJ_FILE size mismatch, re-downloading"
-                        curl -L -o "$MMPROJ_PATH" "https://huggingface.co/$MODEL_REPO/resolve/main/$MMPROJ_FILE"
-                      fi
-                    else
-                      echo "Downloading $MMPROJ_FILE ($MMPROJ_SIZE bytes)..."
-                      curl -L -o "$MMPROJ_PATH" "https://huggingface.co/$MODEL_REPO/resolve/main/$MMPROJ_FILE"
-                    fi
-
-                    echo "$MMPROJ_PATH" > "$MODEL_DIR/.mmproj_path"
-                    echo "Mmproj path: $MMPROJ_PATH"
-                  fi
-                fi
-
-                echo "Model $MODEL_NAME download complete"
-                echo ""
-              done
-
-              echo "All models downloaded successfully"
+            - python3
+            - /scripts/download-models.py
           env:
             - name: MODELS_CONFIG
               valueFrom:
@@ -191,6 +33,8 @@ spec:
           volumeMounts:
             - name: models
               mountPath: /models
+            - name: scripts
+              mountPath: /scripts
       containers:
         - name: llama-server
           image: zot.home.arpa:5000/llama-cpp-vulkan-ngarvey:latest
@@ -201,22 +45,6 @@ spec:
               echo "Starting llama-server in router mode"
               echo "Available models:"
               ls -la /models/
-
-              # Parse models configuration to create model aliases
-              echo "$MODELS_CONFIG" | jq -c '.[]' | while read -r model_config; do
-                MODEL_NAME=$(echo "$model_config" | jq -r '.name')
-                MODEL_DIR="/models/$MODEL_NAME"
-
-                if [ -f "$MODEL_DIR/.model_path" ]; then
-                  MODEL_PATH=$(cat "$MODEL_DIR/.model_path")
-                  echo "  - $MODEL_NAME: $MODEL_PATH"
-
-                  if [ -f "$MODEL_DIR/.mmproj_path" ]; then
-                    MMPROJ_PATH=$(cat "$MODEL_DIR/.mmproj_path")
-                    echo "    (with mmproj: $MMPROJ_PATH)"
-                  fi
-                fi
-              done
 
               # Build args from LLAMA_ARGS configmap
               # In router mode, we use --models-dir instead of --model
@@ -236,11 +64,6 @@ spec:
                 configMapKeyRef:
                   name: llama-cpp-config
                   key: LLAMA_ARGS
-            - name: MODELS_CONFIG
-              valueFrom:
-                configMapKeyRef:
-                  name: llama-cpp-config
-                  key: MODELS_CONFIG
           ports:
             - containerPort: 8080
           livenessProbe:
@@ -266,3 +89,7 @@ spec:
           hostPath:
             path: /dev/dri
             type: Directory
+        - name: scripts
+          configMap:
+            name: llama-cpp-scripts
+            defaultMode: 0755

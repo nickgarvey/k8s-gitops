@@ -18,8 +18,14 @@ data:
       },
       {
         "name": "qwen3-vl-30b",
-        "repo": "unsloth/Qwen3-VL-30B-A3B-Thinking-GGUF",
-        "filter": "Q5_K_M",
+        "repo": "unsloth/Qwen3-VL-30B-A3B-Instruct-GGUF",
+        "filter": "Q8_K_XL",
+        "mmproj": "mmproj-F16.gguf"
+      },
+      {
+        "name": "qwen3-vl-235b",
+        "repo": "unsloth/Qwen3-VL-235B-A22B-Instruct-1M-GGUF",
+        "filter": "Q3_K_S",
         "mmproj": "mmproj-F16.gguf"
       }
     ]
@@ -36,3 +42,4 @@ data:
     --ubatch-size 512
     --jinja
     --models-max 2
+    --timeout 1800
