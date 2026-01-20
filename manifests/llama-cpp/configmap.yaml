@@ -38,7 +38,7 @@ data:
     --n-gpu-layers 99
     --ctx-size 65536
     --metrics
-    --batch-size 4096
+    --batch-size 512
     --ubatch-size 512
     --jinja
     --models-max 2

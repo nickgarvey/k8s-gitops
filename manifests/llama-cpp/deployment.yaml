@@ -67,12 +67,19 @@ spec:
           ports:
             - containerPort: 8080
           livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  # Check main health endpoint
+                  curl -sf http://localhost:8080/health > /dev/null || exit 1
+                  # Check if models endpoint is responding (indicates router is working)
+                  curl -sf http://localhost:8080/v1/models > /dev/null || exit 1
             initialDelaySeconds: 120
             periodSeconds: 30
-            failureThreshold: 3
+            failureThreshold: 2
+            timeoutSeconds: 10
           volumeMounts:
             - name: models
               mountPath: /models
