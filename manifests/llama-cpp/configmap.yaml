@@ -11,6 +11,12 @@ data:
   MODELS_CONFIG: |
     [
       {
+        "name": "translategemma-12b-it",
+        "repo": "NikolayKozloff/translategemma-12b-it-Q4_K_M-GGUF",
+        "filter": "Q4_K_M",
+        "mmproj": ""
+      },
+      {
         "name": "qwen3-80b",
         "repo": "unsloth/Qwen3-Next-80B-A3B-Instruct-GGUF",
         "filter": "Q5_K_M",
@@ -23,10 +29,10 @@ data:
         "mmproj": "mmproj-F16.gguf"
       },
       {
-        "name": "qwen3-vl-235b",
-        "repo": "unsloth/Qwen3-VL-235B-A22B-Instruct-1M-GGUF",
-        "filter": "Q3_K_S",
-        "mmproj": "mmproj-F16.gguf"
+        "name": "glm-4.7-flash",
+        "repo": "unsloth/GLM-4.7-Flash-GGUF",
+        "filter": "Q4_K_XL",
+        "mmproj": ""
       }
     ]
 
@@ -38,7 +44,7 @@ data:
     --n-gpu-layers 99
     --ctx-size 65536
     --metrics
-    --batch-size 512
+    --batch-size 4096
     --ubatch-size 512
     --jinja
     --models-max 2
