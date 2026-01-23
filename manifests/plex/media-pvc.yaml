@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: truenas-media-pvc
+  namespace: plex
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  accessModes:
+    - ReadOnlyMany
+  storageClassName: ""
+  volumeName: truenas-media-pv
+  resources:
+    requests:
+      storage: 1000Gi

@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: plex
+  namespace: plex
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  type: LoadBalancer
+  loadBalancerIP: 10.28.15.208
+  selector:
+    app: plex
+  ports:
+    - name: plex-web
+      port: 80
+      targetPort: 32400
+      protocol: TCP
+    - name: roku
+      port: 8324
+      targetPort: 8324
+      protocol: TCP
+    - name: dlna-tcp
+      port: 32469
+      targetPort: 32469
+      protocol: TCP
+    - name: dlna-udp
+      port: 1900
+      targetPort: 1900
+      protocol: UDP
+    - name: discovery-udp
+      port: 5353
+      targetPort: 5353
+      protocol: UDP
+    - name: gdm-1
+      port: 32410
+      targetPort: 32410
+      protocol: UDP
+    - name: gdm-2
+      port: 32411
+      targetPort: 32411
+      protocol: UDP
+    - name: gdm-3
+      port: 32412
+      targetPort: 32412
+      protocol: UDP
+    - name: gdm-4
+      port: 32413
+      targetPort: 32413
+      protocol: UDP
+    - name: gdm-5
+      port: 32414
+      targetPort: 32414
+      protocol: UDP

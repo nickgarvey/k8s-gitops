@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plex
+  namespace: plex
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: plex
+  template:
+    metadata:
+      labels:
+        app: plex
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      containers:
+        - name: plex
+          image: plexinc/pms-docker:latest
+          ports:
+            - containerPort: 32400
+              name: plex-web
+              protocol: TCP
+            - containerPort: 1900
+              name: dlna-udp
+              protocol: UDP
+            - containerPort: 5353
+              name: discovery-udp
+              protocol: UDP
+            - containerPort: 8324
+              name: roku
+              protocol: TCP
+            - containerPort: 32410
+              name: gdm-1
+              protocol: UDP
+            - containerPort: 32411
+              name: gdm-2
+              protocol: UDP
+            - containerPort: 32412
+              name: gdm-3
+              protocol: UDP
+            - containerPort: 32413
+              name: gdm-4
+              protocol: UDP
+            - containerPort: 32414
+              name: gdm-5
+              protocol: UDP
+            - containerPort: 32469
+              name: dlna-tcp
+              protocol: TCP
+          # Requires Intel GPU Device Plugin:
+          # kubectl apply -k 'https://github.com/intel/intel-device-plugins-for-kubernetes/deployments/gpu_plugin?ref=v0.31.0'
+          resources:
+            limits:
+              gpu.intel.com/i915: 1
+          env:
+            - name: TZ
+              value: "America/Los_Angeles"
+            - name: ADVERTISE_IP
+              value: ""  # Set this to your server's IP if needed
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: media
+              mountPath: /media
+              readOnly: true
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: plex-config
+        - name: media
+          persistentVolumeClaim:
+            claimName: truenas-media-pvc
