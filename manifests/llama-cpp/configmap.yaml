@@ -11,15 +11,9 @@ data:
   MODELS_CONFIG: |
     [
       {
-        "name": "translategemma-12b-it",
-        "repo": "NikolayKozloff/translategemma-12b-it-Q4_K_M-GGUF",
-        "filter": "Q4_K_M",
-        "mmproj": ""
-      },
-      {
-        "name": "qwen3-80b",
-        "repo": "unsloth/Qwen3-Next-80B-A3B-Instruct-GGUF",
-        "filter": "Q5_K_M",
+        "name": "qwen3-coder-next",
+        "repo": "unsloth/Qwen3-Coder-Next-GGUF",
+        "filter": "UD-Q6_K_XL",
         "mmproj": ""
       },
       {
@@ -27,12 +21,6 @@ data:
         "repo": "unsloth/Qwen3-VL-30B-A3B-Instruct-GGUF",
         "filter": "Q8_K_XL",
         "mmproj": "mmproj-F16.gguf"
-      },
-      {
-        "name": "glm-4.7-flash",
-        "repo": "unsloth/GLM-4.7-Flash-GGUF",
-        "filter": "Q4_K_XL",
-        "mmproj": ""
       }
     ]
 
