@@ -1,0 +1,28 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: freezer-power-alerts
+  namespace: prometheus
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+    prometheus: prometheus
+spec:
+  groups:
+    - name: homeassistant.freezer-power
+      rules:
+        - alert: FreezerPowerHighTooLong
+          expr: homeassistant_sensor_power_w{entity="sensor.freezer_electric_consumption_w"} > 50
+          for: 90m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Freezer power has been high for over 1.5 hours"
+            description: "Freezer electric consumption ({{ $labels.friendly_name }}) has been above 50W for more than 1.5 hours."
+        - alert: FreezerPowerHighTooLongCritical
+          expr: homeassistant_sensor_power_w{entity="sensor.freezer_electric_consumption_w"} > 50
+          for: 3h
+          labels:
+            severity: critical
+          annotations:
+            summary: "Freezer power has been high for over 3 hours"
+            description: "Freezer electric consumption ({{ $labels.friendly_name }}) has been above 50W for more than 3 hours."
