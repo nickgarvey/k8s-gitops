@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: playwright-renderer
+  namespace: playwright-renderer
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+  annotations:
+    metallb.universe.tf/loadBalancerIPs: 10.28.15.209
+spec:
+  selector:
+    app: playwright-renderer
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+  type: LoadBalancer
