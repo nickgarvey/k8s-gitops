@@ -40,13 +40,6 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
-          resources:
-            requests:
-              memory: "2Gi"
-              cpu: "500m"
-            limits:
-              memory: "4Gi"
-              cpu: "2000m"
       volumes:
         - name: data
           hostPath:

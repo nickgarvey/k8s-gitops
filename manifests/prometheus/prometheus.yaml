@@ -21,15 +21,6 @@ spec:
   # Retention settings
   retentionSize: 22GB
 
-  # Resource limits
-  resources:
-    requests:
-      cpu: 100m
-      memory: 1Gi
-    limits:
-      cpu: 500m
-      memory: 2Gi
-
   # Storage configuration
   storage:
     volumeClaimTemplate:

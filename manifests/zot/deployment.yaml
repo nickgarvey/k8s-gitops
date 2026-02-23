@@ -33,13 +33,6 @@ spec:
             - name: zot-config
               mountPath: /etc/zot
               readOnly: true
-          resources:
-            requests:
-              memory: "256Mi"
-              cpu: "100m"
-            limits:
-              memory: "1Gi"
-              cpu: "1000m"
           livenessProbe:
             httpGet:
               path: /v2/

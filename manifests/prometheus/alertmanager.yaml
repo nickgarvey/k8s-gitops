@@ -10,15 +10,6 @@ spec:
   version: v0.27.0
   externalUrl: http://alertmanager.home.arpa:9093
 
-  # Resource limits
-  resources:
-    requests:
-      cpu: 10m
-      memory: 32Mi
-    limits:
-      cpu: 100m
-      memory: 64Mi
-
   # Security context
   securityContext:
     runAsNonRoot: true
