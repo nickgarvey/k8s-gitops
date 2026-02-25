@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trmnl-display
+  namespace: trmnl-display
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trmnl-display
+  template:
+    metadata:
+      labels:
+        app: trmnl-display
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      containers:
+        - name: trmnl-display
+          image: zot.home.arpa:5000/trmnl-display:latest
+          ports:
+            - containerPort: 8080
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          volumeMounts:
+            - name: secret-vol
+              mountPath: /config/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: secret-vol
+              mountPath: /config/sa.json
+              subPath: sa.json
+              readOnly: true
+            - name: ca-vol
+              mountPath: /config/garvey-ca.pem
+              subPath: garvey-ca.pem
+              readOnly: true
+      volumes:
+        - name: secret-vol
+          secret:
+            secretName: trmnl-display-secret
+        - name: ca-vol
+          configMap:
+            name: trmnl-display-ca
