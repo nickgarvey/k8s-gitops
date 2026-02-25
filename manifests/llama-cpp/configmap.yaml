@@ -17,9 +17,9 @@ data:
         "mmproj": ""
       },
       {
-        "name": "qwen3-vl-30b",
-        "repo": "unsloth/Qwen3-VL-30B-A3B-Instruct-GGUF",
-        "filter": "Q8_K_XL",
+        "name": "qwen3.5-35b-a3b",
+        "repo": "unsloth/Qwen3.5-35B-A3B-GGUF",
+        "filter": "Q8_0",
         "mmproj": "mmproj-F16.gguf"
       }
     ]
