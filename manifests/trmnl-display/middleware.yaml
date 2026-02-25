@@ -1,0 +1,8 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: trmnl-rewrite
+  namespace: trmnl-display
+spec:
+  replacePath:
+    path: /display
