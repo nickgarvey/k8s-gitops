@@ -19,6 +19,9 @@ spec:
       containers:
         - name: trmnl-display
           image: zot.home.arpa:5000/trmnl-display:latest
+          env:
+            - name: TZ
+              value: America/Los_Angeles
           ports:
             - containerPort: 8080
               name: http
