@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: freezer-temp-alerts
+  namespace: prometheus
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+    prometheus: prometheus
+spec:
+  groups:
+    - name: homeassistant.freezer-temp
+      rules:
+        - alert: FreezerTempTooHigh
+          expr: homeassistant_sensor_temperature_celsius{entity="sensor.freezer_temp_sensor_temperature"} > -5
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Freezer temperature is above -5°C"
+            description: "Freezer temperature ({{ $labels.friendly_name }}) has been above -5°C for more than 20 minutes. Current value: {{ $value }}°C."
