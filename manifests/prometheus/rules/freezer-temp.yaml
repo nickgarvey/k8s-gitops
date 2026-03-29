@@ -10,11 +10,14 @@ spec:
   groups:
     - name: homeassistant.freezer-temp
       rules:
+        # Threshold is lenient because the sensor isn't very accurate;
+        # this is meant to catch a door left open or compressor failure,
+        # not enforce food-safe temps.
         - alert: FreezerTempTooHigh
-          expr: homeassistant_sensor_temperature_celsius{entity="sensor.freezer_temp_sensor_temperature"} > -5
-          for: 15m
+          expr: homeassistant_sensor_temperature_celsius{entity="sensor.freezer_temp_sensor_temperature"} > 2
+          for: 30m
           labels:
             severity: critical
           annotations:
-            summary: "Freezer temperature is above -5°C"
-            description: "Freezer temperature ({{ $labels.friendly_name }}) has been above -5°C for more than 20 minutes. Current value: {{ $value }}°C."
+            summary: "Freezer temperature is above 2°C"
+            description: "Freezer temperature ({{ $labels.friendly_name }}) has been above 2°C for more than 30 minutes. Current value: {{ $value }}°C."
