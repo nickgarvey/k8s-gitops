@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: truenas-media-pv
+  name: smb-media-pv
   labels:
     app.kubernetes.io/managed-by: ngarvey-homelab
 spec:
@@ -19,12 +19,13 @@ spec:
     - mfsymlinks
     - cache=strict
     - noserverino
+    - guest
   csi:
     driver: smb.csi.k8s.io
     readOnly: true
-    volumeHandle: truenas-media-volume
+    volumeHandle: smb-media-volume
     volumeAttributes:
-      source: "//truenas.home.arpa/media"
+      source: "//smb.home.arpa/media"
     nodeStageSecretRef:
-      name: truenas-smb-secret
+      name: smb-secret
       namespace: plex

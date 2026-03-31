@@ -74,4 +74,4 @@ spec:
             claimName: plex-config
         - name: media
           persistentVolumeClaim:
-            claimName: truenas-media-pvc
+            claimName: smb-media-pvc
