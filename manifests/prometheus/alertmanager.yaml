@@ -8,7 +8,7 @@ metadata:
 spec:
   replicas: 1
   version: v0.31.1
-  externalUrl: http://alertmanager.home.arpa:9093
+  externalUrl: http://alertmanager.prometheus.k8s.home.arpa:9093
 
   # Security context
   securityContext:

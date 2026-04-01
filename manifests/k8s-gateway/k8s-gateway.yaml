@@ -1,0 +1,188 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: k8s-gateway
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-gateway
+  namespace: k8s-gateway
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8s-gateway
+rules:
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - services
+      - namespaces
+    verbs:
+      - list
+      - watch
+  - apiGroups:
+      - extensions
+      - networking.k8s.io
+    resources:
+      - ingresses
+    verbs:
+      - list
+      - watch
+  - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - gateways
+      - httproutes
+      - grpcroutes
+      - tlsroutes
+    verbs:
+      - list
+      - watch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-gateway
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: k8s-gateway
+subjects:
+  - kind: ServiceAccount
+    name: k8s-gateway
+    namespace: k8s-gateway
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k8s-gateway
+  namespace: k8s-gateway
+data:
+  Corefile: |-
+    .:1053 {
+        errors
+        log
+        health {
+            lameduck 5s
+        }
+        ready
+        k8s_gateway k8s.home.arpa {
+          apex k8s-gateway.k8s-gateway
+          ttl 300
+          resources Ingress Service
+        }
+        prometheus 0.0.0.0:9153
+        loop
+        reload
+        loadbalance
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-gateway
+  namespace: k8s-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: k8s-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: k8s-gateway
+    spec:
+      serviceAccountName: k8s-gateway
+      dnsPolicy: ClusterFirst
+      containers:
+        - name: k8s-gateway
+          image: ghcr.io/k8s-gateway/k8s_gateway:1.7.0
+          imagePullPolicy: IfNotPresent
+          args: ["-conf", "/etc/coredns/Corefile"]
+          ports:
+            - containerPort: 1053
+              protocol: UDP
+              name: dns-udp
+            - containerPort: 1053
+              protocol: TCP
+              name: dns-tcp
+            - containerPort: 8080
+              protocol: TCP
+              name: health
+            - containerPort: 8181
+              protocol: TCP
+              name: ready
+            - containerPort: 9153
+              protocol: TCP
+              name: metrics
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 60
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8181
+              scheme: HTTP
+            initialDelaySeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 5
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/coredns
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: config-volume
+          configMap:
+            name: k8s-gateway
+            items:
+              - key: Corefile
+                path: Corefile
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8s-gateway
+  namespace: k8s-gateway
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: k8s-gateway
+  ports:
+    - port: 53
+      targetPort: 1053
+      protocol: UDP
+      name: dns-udp
+    - port: 53
+      targetPort: 1053
+      protocol: TCP
+      name: dns-tcp
