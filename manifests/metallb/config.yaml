@@ -25,6 +25,20 @@ spec:
 
 ---
 apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: ipv6-pool
+  namespace: metallb-system
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  # IPv6 from HE /48 subnet :2 (reserved for k8s services)
+  # See: nix-configs/modules/lan-hosts.nix subnet plan
+  addresses:
+    - 2001:470:482f:2::/112
+
+---
+apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
   name: default-l2
@@ -34,4 +48,5 @@ metadata:
 spec:
   ipAddressPools:
     - default-pool
+    - ipv6-pool
 
