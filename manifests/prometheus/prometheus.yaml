@@ -19,7 +19,7 @@ spec:
   scrapeConfigNamespaceSelector: {}
 
   # Retention settings
-  retentionSize: 22GB
+  retentionSize: 15GB
 
   # Storage configuration
   storage:
