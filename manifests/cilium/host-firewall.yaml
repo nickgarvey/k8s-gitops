@@ -1,0 +1,30 @@
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: k3s-node-firewall
+spec:
+  description: "Allow LAN, cluster-internal, and ICMPv6; drop everything else"
+  nodeSelector: {}
+  ingress:
+    # Allow all traffic from LAN (trusted home network)
+    - fromCIDR:
+        - "10.28.0.0/16"
+        - "2001:470:482f::/48"
+    # Allow all cluster-internal traffic (pods, nodes)
+    - fromEntities:
+        - cluster
+        - remote-node
+    # Allow ICMPv6 from anywhere (ping, NDP, PMTUD)
+    - icmps:
+        - fields:
+            - family: IPv6
+              type: 128  # Echo Request
+            - family: IPv6
+              type: 135  # Neighbor Solicitation
+            - family: IPv6
+              type: 136  # Neighbor Advertisement
+  egress:
+    # Allow all egress
+    - toEntities:
+        - world
+        - cluster
