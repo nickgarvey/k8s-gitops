@@ -173,7 +173,11 @@ kind: Service
 metadata:
   name: k8s-gateway
   namespace: k8s-gateway
+  annotations:
+    io.cilium/lb-ipam-ips: "2001:470:482f:2::53"
 spec:
+  ipFamilies: [IPv6]
+  ipFamilyPolicy: SingleStack
   type: LoadBalancer
   selector:
     app.kubernetes.io/name: k8s-gateway

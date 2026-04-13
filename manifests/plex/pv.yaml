@@ -20,6 +20,7 @@ spec:
     - cache=strict
     - noserverino
     - guest
+    - ip=2001:470:482f::14
   csi:
     driver: smb.csi.k8s.io
     readOnly: true

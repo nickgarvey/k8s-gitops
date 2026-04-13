@@ -7,7 +7,6 @@ metadata:
     app.kubernetes.io/managed-by: ngarvey-homelab
 spec:
   type: LoadBalancer
-  loadBalancerIP: 10.28.15.208
   selector:
     app: plex
   ports:

@@ -5,7 +5,11 @@ metadata:
   namespace: zot
   labels:
     app.kubernetes.io/managed-by: ngarvey-homelab
+  annotations:
+    io.cilium/lb-ipam-ips: "2001:470:482f:2::5000"
 spec:
+  ipFamilies: [IPv6]
+  ipFamilyPolicy: SingleStack
   selector:
     app: zot
   ports:
@@ -14,5 +18,3 @@ spec:
       targetPort: 5000
       name: http
   type: LoadBalancer
-  # Fixed IP so k3s nodes can have a stable registry address
-  loadBalancerIP: 10.28.15.206

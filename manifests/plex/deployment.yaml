@@ -52,6 +52,27 @@ spec:
             - containerPort: 32469
               name: dlna-tcp
               protocol: TCP
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  TOKEN=$(grep -oP 'PlexOnlineToken="\K[^"]+' "/config/Library/Application Support/Plex Media Server/Preferences.xml") &&
+                  curl -sf "http://localhost:32400/library/sections?X-Plex-Token=${TOKEN}" > /dev/null
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 18
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  TOKEN=$(grep -oP 'PlexOnlineToken="\K[^"]+' "/config/Library/Application Support/Plex Media Server/Preferences.xml") &&
+                  curl -sf "http://localhost:32400/library/sections?X-Plex-Token=${TOKEN}" > /dev/null
+            periodSeconds: 60
+            failureThreshold: 3
           # Requires Intel GPU Device Plugin:
           # kubectl apply -k 'https://github.com/intel/intel-device-plugins-for-kubernetes/deployments/gpu_plugin?ref=v0.31.0'
           resources:

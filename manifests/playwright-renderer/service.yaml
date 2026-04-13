@@ -5,8 +5,6 @@ metadata:
   namespace: playwright-renderer
   labels:
     app.kubernetes.io/managed-by: ngarvey-homelab
-  annotations:
-    metallb.universe.tf/loadBalancerIPs: 10.28.15.209
 spec:
   selector:
     app: playwright-renderer

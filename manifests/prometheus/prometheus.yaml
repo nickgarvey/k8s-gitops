@@ -19,7 +19,7 @@ spec:
   scrapeConfigNamespaceSelector: {}
 
   # Retention settings
-  retentionSize: 15GB
+  retentionSize: 34GB
 
   # Storage configuration
   storage:
@@ -30,7 +30,7 @@ spec:
           - ReadWriteOnce
         resources:
           requests:
-            storage: 25Gi
+            storage: 40Gi
 
   # Security context for storage permissions
   securityContext:
