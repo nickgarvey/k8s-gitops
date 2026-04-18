@@ -6,3 +6,12 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: ngarvey-homelab
 value: delete-both-statefulset-and-deployment-pod
+---
+apiVersion: longhorn.io/v1beta2
+kind: Setting
+metadata:
+  name: default-replica-count
+  namespace: longhorn-system
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+value: "2"
