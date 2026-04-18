@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: anki-sync-server
+  namespace: anki
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+  annotations:
+    tailscale.com/http-redirect: "true"
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - anki-sync-server
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: anki-sync-server
+                port:
+                  number: 80

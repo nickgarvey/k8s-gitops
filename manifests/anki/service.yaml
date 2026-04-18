@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: anki-sync-server
+  namespace: anki
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  type: ClusterIP
+  selector:
+    app: anki-sync-server
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080

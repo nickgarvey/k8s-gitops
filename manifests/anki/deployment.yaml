@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anki-sync-server
+  namespace: anki
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: anki-sync-server
+  template:
+    metadata:
+      labels:
+        app: anki-sync-server
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      containers:
+        - name: anki-sync-server
+          image: jeankhawand/anki-sync-server:25.07
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: SYNC_HOST
+              value: "::"
+          envFrom:
+            - secretRef:
+                name: anki-credentials
+          volumeMounts:
+            - name: data
+              mountPath: /anki_data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: anki-data
