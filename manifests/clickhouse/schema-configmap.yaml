@@ -1,0 +1,116 @@
+# Authoritative schema DDL. Mirrors ipv6-control-audit/docs/schema.md.
+# The schema-init Job applies this; Vector inserts into these tables.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-schema
+  namespace: clickhouse
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+data:
+  schema.sql: |
+    CREATE DATABASE IF NOT EXISTS netaudit;
+
+    CREATE TABLE IF NOT EXISTS netaudit.events (
+        ts                  DateTime64(6, 'UTC')  CODEC(Delta, ZSTD(3)),
+        host                LowCardinality(String),
+        netns               LowCardinality(String)  DEFAULT 'host',
+        iface               LowCardinality(String),
+        iface_idx           Nullable(UInt32),
+
+        eth_src             String,
+        eth_dst             String,
+        ip6_src             IPv6,
+        ip6_dst             IPv6,
+        proto               LowCardinality(String),
+
+        icmp6_type          Nullable(UInt8),
+        icmp6_code          Nullable(UInt8),
+        icmp6_type_name     LowCardinality(String)  DEFAULT '',
+        icmp6_target        Nullable(IPv6),
+        icmp6_opt_linkaddr  Nullable(String),
+        mld_mcast_addr      Nullable(IPv6),
+
+        dhcp6_msgtype       Nullable(UInt8),
+        dhcp6_msgtype_name  LowCardinality(String)  DEFAULT '',
+        dhcp6_xid           Nullable(UInt32),
+
+        raw_len             UInt16
+    )
+    ENGINE = MergeTree
+    PARTITION BY toDate(ts)
+    ORDER BY (host, ts)
+    TTL toDateTime(ts) + INTERVAL 30 DAY;
+
+    -- Periodic snapshot of `bridge -d mdb show`. Primary question this
+    -- answers: does the bridge MDB contain an entry for the router's own
+    -- solicited-node groups (e.g. ff02::1:ff00:1), and if so with what
+    -- port (host_joined is signalled by port == bridge name).
+    CREATE TABLE IF NOT EXISTS netaudit.mdb (
+        ts          DateTime64(6, 'UTC')  CODEC(Delta, ZSTD(3)),
+        host        LowCardinality(String),
+        bridge      LowCardinality(String),
+        port        LowCardinality(String),
+        grp         IPv6,
+        vid         UInt16  DEFAULT 0,
+        state       LowCardinality(String),  -- permanent|temp|static
+        proto       LowCardinality(String),  -- kernel|user|zebra|static
+        host_joined UInt8                    -- 1 iff port == bridge (local stack)
+    )
+    ENGINE = MergeTree
+    PARTITION BY toDate(ts)
+    ORDER BY (host, bridge, grp, ts)
+    TTL toDateTime(ts) + INTERVAL 30 DAY;
+
+    -- Periodic snapshot of /proc/net/igmp6. Distinct from bridge MDB:
+    -- this is what the IPv6 stack thinks it has joined per netdev. The
+    -- whole point of the NDP bug is that these two can desynchronize.
+    CREATE TABLE IF NOT EXISTS netaudit.igmp6 (
+        ts       DateTime64(6, 'UTC')  CODEC(Delta, ZSTD(3)),
+        host     LowCardinality(String),
+        ifindex  UInt16,
+        iface    LowCardinality(String),
+        grp      IPv6,
+        refcnt   UInt32,
+        flags    String,   -- hex from column 5 of /proc/net/igmp6
+        state    UInt32    -- column 6
+    )
+    ENGINE = MergeTree
+    PARTITION BY toDate(ts)
+    ORDER BY (host, iface, grp, ts)
+    TTL toDateTime(ts) + INTERVAL 30 DAY;
+
+    -- Periodic snapshot of `ip -6 neigh show`. The user-visible symptom
+    -- of the NDP bug is a neighbor entry flipping REACHABLE -> FAILED
+    -- on garage/k3s nodes for 2001:470:482f::1. Captured here so we can
+    -- reconstruct that transition without on-host probing.
+    -- Periodic snapshot of `ip -o link show`. Resolves events.iface_idx
+    -- (populated only under captureMode="any", where tshark -i any
+    -- collapses frame.interface_name to the literal "any" and we get
+    -- the real ifindex from SLL v2) back to a human name. Ifindexes
+    -- are recycled after an interface is removed, so join on (host,
+    -- ifindex) within a tight time window, not globally.
+    CREATE TABLE IF NOT EXISTS netaudit.iface_index (
+        ts       DateTime64(6, 'UTC')  CODEC(Delta, ZSTD(3)),
+        host     LowCardinality(String),
+        ifindex  UInt32,
+        name     LowCardinality(String)
+    )
+    ENGINE = MergeTree
+    PARTITION BY toDate(ts)
+    ORDER BY (host, ifindex, ts)
+    TTL toDateTime(ts) + INTERVAL 30 DAY;
+
+    CREATE TABLE IF NOT EXISTS netaudit.neigh6 (
+        ts      DateTime64(6, 'UTC')  CODEC(Delta, ZSTD(3)),
+        host    LowCardinality(String),
+        iface   LowCardinality(String),
+        addr    IPv6,
+        lladdr  String,
+        nud     LowCardinality(String),  -- REACHABLE, STALE, DELAY, FAILED, ...
+        router  UInt8
+    )
+    ENGINE = MergeTree
+    PARTITION BY toDate(ts)
+    ORDER BY (host, iface, addr, ts)
+    TTL toDateTime(ts) + INTERVAL 30 DAY;

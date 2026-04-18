@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: clickhouse
+  namespace: clickhouse
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  serviceName: clickhouse-headless
+  selector:
+    matchLabels:
+      app: clickhouse
+  template:
+    metadata:
+      labels:
+        app: clickhouse
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      # ClickHouse likes to mmap large files; noop on recent kernels
+      # but harmless.
+      securityContext:
+        fsGroup: 101
+        runAsUser: 101
+        runAsGroup: 101
+      containers:
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:24.8
+          ports:
+            - containerPort: 8123
+              name: http
+            - containerPort: 9000
+              name: native
+          env:
+            - name: CLICKHOUSE_SKIP_USER_SETUP
+              value: "1"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+            - name: config
+              mountPath: /etc/clickhouse-server/config.d/config.xml
+              subPath: config.xml
+            - name: config
+              mountPath: /etc/clickhouse-server/users.d/users.xml
+              subPath: users.xml
+            - name: passwords
+              mountPath: /etc/clickhouse-server/users.d/passwords.xml
+              subPath: passwords.xml
+              readOnly: true
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "1Gi"
+            limits:
+              memory: "6Gi"
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: clickhouse-data
+        - name: config
+          configMap:
+            name: clickhouse-config
+        - name: passwords
+          secret:
+            secretName: clickhouse-passwords
+            defaultMode: 0440

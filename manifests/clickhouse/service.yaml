@@ -1,0 +1,48 @@
+# Headless Service for the StatefulSet (required) plus the LAN-facing
+# LoadBalancer announcing the HTTP + native ports to the LAN via
+# Cilium L2. Convention: LB IP's last hextet = service's HTTP port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse-headless
+  namespace: clickhouse
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  clusterIP: None
+  ipFamilies: [IPv6]
+  ipFamilyPolicy: SingleStack
+  selector:
+    app: clickhouse
+  ports:
+    - name: http
+      port: 8123
+      targetPort: 8123
+    - name: native
+      port: 9000
+      targetPort: 9000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse
+  namespace: clickhouse
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+  annotations:
+    io.cilium/lb-ipam-ips: "2001:470:482f:2::8123"
+spec:
+  type: LoadBalancer
+  ipFamilies: [IPv6]
+  ipFamilyPolicy: SingleStack
+  selector:
+    app: clickhouse
+  ports:
+    - name: http
+      port: 8123
+      targetPort: 8123
+      protocol: TCP
+    - name: native
+      port: 9000
+      targetPort: 9000
+      protocol: TCP

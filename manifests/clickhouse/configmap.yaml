@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-config
+  namespace: clickhouse
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+data:
+  # Single-node server config. IPv6 listen, relaxed max_memory for the
+  # light ingestion workload this subsystem generates.
+  config.xml: |
+    <?xml version="1.0"?>
+    <clickhouse>
+      <listen_host>::</listen_host>
+      <listen_try>1</listen_try>
+
+      <http_port>8123</http_port>
+      <tcp_port>9000</tcp_port>
+      <interserver_http_port>9009</interserver_http_port>
+
+      <path>/var/lib/clickhouse/</path>
+      <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
+      <user_files_path>/var/lib/clickhouse/user_files/</user_files_path>
+      <format_schema_path>/var/lib/clickhouse/format_schemas/</format_schema_path>
+
+      <logger>
+        <level>information</level>
+        <console>true</console>
+      </logger>
+
+      <mark_cache_size>1073741824</mark_cache_size>
+      <max_server_memory_usage_to_ram_ratio>0.7</max_server_memory_usage_to_ram_ratio>
+
+      <default_profile>default</default_profile>
+      <default_database>default</default_database>
+      <timezone>UTC</timezone>
+
+      <!-- Single-node: disable ZooKeeper explicitly so Replicated* complains loudly if ever mis-used. -->
+      <!-- Access-control files are baked into the image via /etc/clickhouse-server/users.d/ below. -->
+    </clickhouse>
+
+  # Role-based access. Passwords come from the clickhouse SopsSecret
+  # mounted at /etc/clickhouse-server/users.d/passwords.xml.
+  # This file just names the users, their ACL, and references
+  # which password file to read (via placeholder).
+  users.xml: |
+    <?xml version="1.0"?>
+    <clickhouse>
+      <profiles>
+        <default>
+          <max_memory_usage>4000000000</max_memory_usage>
+          <use_uncompressed_cache>0</use_uncompressed_cache>
+          <load_balancing>random</load_balancing>
+        </default>
+        <readonly>
+          <readonly>1</readonly>
+        </readonly>
+        <ingest_profile>
+          <!-- INSERT-only: readonly=2 allows DDL-less writes; we restrict DDL via allow_ddl=0. -->
+          <readonly>0</readonly>
+          <allow_ddl>0</allow_ddl>
+        </ingest_profile>
+      </profiles>
+
+      <quotas>
+        <default>
+          <interval>
+            <duration>3600</duration>
+            <queries>0</queries>
+            <errors>0</errors>
+            <result_rows>0</result_rows>
+            <read_rows>0</read_rows>
+            <execution_time>0</execution_time>
+          </interval>
+        </default>
+      </quotas>
+
+      <!--
+        Users are defined in /etc/clickhouse-server/users.d/passwords.xml,
+        mounted from the clickhouse SopsSecret. See secret.yaml.
+      -->
+    </clickhouse>
