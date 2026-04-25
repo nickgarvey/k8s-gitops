@@ -1,0 +1,44 @@
+# One-shot job to initialize the restic repository in B2. Run ONCE after
+# the secret is created and before the first backup CronJob fires:
+#
+#   kubectl apply -f manifests/couchdb/restic-init-job.yaml
+#   kubectl -n couchdb logs -f job/couchdb-restic-init
+#   kubectl -n couchdb delete job couchdb-restic-init   # after success
+#
+# Re-running against an already-initialized repo will fail loudly and is
+# safe (it cannot overwrite). Kept in the repo for reference and disaster
+# recovery.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: couchdb-restic-init
+  namespace: couchdb
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: couchdb-restic-init
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: init
+          image: alpine:3.20
+          envFrom:
+            - secretRef:
+                name: couchdb-backup-b2
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              apk add --no-cache restic >/dev/null
+              restic init
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              memory: "256Mi"

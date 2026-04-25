@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: couchdb-headless
+  namespace: couchdb
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  clusterIP: None
+  selector:
+    app: couchdb
+  ports:
+    - name: http
+      port: 5984
+      targetPort: 5984
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: couchdb
+  namespace: couchdb
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  type: ClusterIP
+  selector:
+    app: couchdb
+  ports:
+    - name: http
+      port: 5984
+      targetPort: 5984
+      protocol: TCP

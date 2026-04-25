@@ -1,0 +1,69 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: couchdb-backup
+  namespace: couchdb
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  # Daily at 03:00 UTC. Adjust if it conflicts with the 02:30 UTC
+  # Longhorn recurring job.
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: couchdb-backup
+            app.kubernetes.io/managed-by: ngarvey-homelab
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: alpine:3.20
+              envFrom:
+                - secretRef:
+                    name: couchdb-admin
+                - secretRef:
+                    name: couchdb-backup-b2
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  apk add --no-cache curl jq restic >/dev/null
+                  mkdir -p /dump
+                  echo "[dump] Listing databases..."
+                  DBS=$(curl -sf -u "$COUCHDB_USER:$COUCHDB_PASSWORD" \
+                    "http://couchdb:5984/_all_dbs" | jq -r '.[]')
+                  for db in $DBS; do
+                    enc=$(printf '%s' "$db" | jq -sRr @uri)
+                    echo "[dump] $db"
+                    curl -sf -u "$COUCHDB_USER:$COUCHDB_PASSWORD" \
+                      "http://couchdb:5984/$enc/_all_docs?include_docs=true&attachments=true" \
+                      | gzip > "/dump/$db.json.gz"
+                  done
+                  ls -lah /dump/
+                  echo "[restic] Backup..."
+                  restic backup /dump --tag couchdb --host couchdb-k8s
+                  echo "[restic] Forget + prune..."
+                  restic forget --tag couchdb \
+                    --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+                  echo "[done]"
+              volumeMounts:
+                - name: dump
+                  mountPath: /dump
+              resources:
+                requests:
+                  cpu: "50m"
+                  memory: "128Mi"
+                limits:
+                  memory: "512Mi"
+          volumes:
+            # Dump dir lives in pod-local scratch space; restic streams it
+            # off-cluster to B2, then the pod exits and emptyDir is reclaimed.
+            - name: dump
+              emptyDir: {}

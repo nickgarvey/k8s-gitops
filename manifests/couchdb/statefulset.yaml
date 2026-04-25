@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: couchdb
+  namespace: couchdb
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  serviceName: couchdb-headless
+  selector:
+    matchLabels:
+      app: couchdb
+  template:
+    metadata:
+      labels:
+        app: couchdb
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      # The official couchdb image runs as uid/gid 5984.
+      securityContext:
+        fsGroup: 5984
+        runAsUser: 5984
+        runAsGroup: 5984
+      containers:
+        - name: couchdb
+          image: couchdb:3.4
+          ports:
+            - containerPort: 5984
+              name: http
+          envFrom:
+            - secretRef:
+                name: couchdb-admin
+          volumeMounts:
+            - name: data
+              mountPath: /opt/couchdb/data
+            - name: config
+              mountPath: /opt/couchdb/etc/local.d/10-livesync.ini
+              subPath: 10-livesync.ini
+              readOnly: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /_up
+              port: 5984
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /_up
+              port: 5984
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: couchdb-data
+        - name: config
+          configMap:
+            name: couchdb-config
