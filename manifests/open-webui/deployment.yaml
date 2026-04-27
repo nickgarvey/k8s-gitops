@@ -28,9 +28,9 @@ spec:
             - name: HOST
               value: "::"
             - name: OPENAI_API_BASE_URLS
-              value: "http://llama-cpp.home.arpa:8080/v1"
-            - name: OPENAI_API_KEY
-              value: "sk-unused"
+              value: "http://desktop-nixos.home.arpa:8080/v1;http://framework-desktop.home.arpa:8080/v1"
+            - name: OPENAI_API_KEYS
+              value: "sk-unused;sk-unused"
             - name: WEBUI_AUTH
               value: "false"
             - name: ENABLE_OLLAMA_API
