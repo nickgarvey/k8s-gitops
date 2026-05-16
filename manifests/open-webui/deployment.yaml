@@ -28,9 +28,9 @@ spec:
             - name: HOST
               value: "::"
             - name: OPENAI_API_BASE_URLS
-              value: "http://desktop-nixos.home.arpa:8080/v1;http://framework-desktop.home.arpa:8080/v1"
+              value: "http://litellm.litellm.svc.cluster.local:4000/v1"
             - name: OPENAI_API_KEYS
-              value: "sk-unused;sk-unused"
+              value: "sk-unused"
             - name: WEBUI_AUTH
               value: "false"
             - name: ENABLE_OLLAMA_API

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  namespace: litellm
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+data:
+  config.yaml: |
+    model_list:
+      - model_name: local-gpu
+        litellm_params:
+          model: openai/llama-cpp
+          api_base: http://tarrasque.home.arpa:8080/v1
+          api_key: sk-unused
+    litellm_settings:
+      drop_params: true
