@@ -1,0 +1,147 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opencloud
+  namespace: opencloud
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: opencloud
+  template:
+    metadata:
+      labels:
+        app: opencloud
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      securityContext:
+        fsGroup: 1000
+      hostAliases:
+        - ip: "127.0.0.1"
+          hostnames:
+            - opencloud.bigeye-turtle.ts.net
+      initContainers:
+        - name: gen-cert
+          image: alpine:3.20
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              if [ ! -s /certs/tls.crt ]; then
+                apk add --no-cache openssl >/dev/null
+                openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+                  -keyout /certs/tls.key -out /certs/tls.crt \
+                  -subj "/CN=opencloud.bigeye-turtle.ts.net" \
+                  -addext "subjectAltName=DNS:opencloud.bigeye-turtle.ts.net"
+              fi
+          volumeMounts:
+            - name: caddy-certs
+              mountPath: /certs
+      containers:
+        - name: caddy
+          image: caddy:2-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
+          ports:
+            - containerPort: 443
+              name: https
+          volumeMounts:
+            - name: caddy-config
+              mountPath: /etc/caddy
+            - name: caddy-data
+              mountPath: /data
+            - name: caddy-certs
+              mountPath: /certs
+              readOnly: true
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: opencloud
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+          image: opencloudeu/opencloud-rolling:latest
+          imagePullPolicy: IfNotPresent
+          command: ["opencloud"]
+          args: ["server"]
+          ports:
+            - containerPort: 9200
+              name: http
+          env:
+            - name: OC_CONFIG_DIR
+              value: /etc/opencloud
+            - name: OC_BASE_DATA_PATH
+              value: /var/lib/opencloud
+            - name: OC_URL
+              value: https://opencloud.bigeye-turtle.ts.net
+            - name: PROXY_HTTP_ADDR
+              value: 0.0.0.0:9200
+            - name: PROXY_TLS
+              value: "false"
+            - name: OC_INSECURE
+              value: "true"
+            - name: STORAGE_USERS_DRIVER
+              value: decomposeds3
+            - name: STORAGE_USERS_DECOMPOSEDS3_ENDPOINT
+              value: http://router.home.arpa:7777
+            - name: STORAGE_USERS_DECOMPOSEDS3_REGION
+              value: us-east-1
+            - name: STORAGE_USERS_DECOMPOSEDS3_BUCKET
+              value: opencloud
+            - name: STORAGE_USERS_DECOMPOSEDS3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: opencloud-storage
+                  key: GATEWAY_S3_ACCESS_KEY
+            - name: STORAGE_USERS_DECOMPOSEDS3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: opencloud-storage
+                  key: GATEWAY_S3_SECRET_KEY
+            - name: IDM_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: opencloud-storage
+                  key: IDM_ADMIN_PASSWORD
+          volumeMounts:
+            - name: data
+              mountPath: /etc/opencloud
+              subPath: etc
+            - name: data
+              mountPath: /var/lib/opencloud
+              subPath: lib
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9200
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: opencloud-data
+        - name: caddy-config
+          configMap:
+            name: opencloud-caddy
+        - name: caddy-data
+          emptyDir: {}
+        - name: caddy-certs
+          emptyDir: {}

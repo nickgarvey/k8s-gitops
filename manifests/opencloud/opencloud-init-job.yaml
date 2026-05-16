@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opencloud-init
+  namespace: opencloud
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: opencloud-init
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: init
+          image: opencloudeu/opencloud-rolling:latest
+          imagePullPolicy: IfNotPresent
+          command: ["opencloud"]
+          args: ["init", "--insecure", "yes", "--force-overwrite", "no"]
+          env:
+            - name: OC_CONFIG_DIR
+              value: /etc/opencloud
+            - name: OC_BASE_DATA_PATH
+              value: /var/lib/opencloud
+            - name: IDM_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: opencloud-storage
+                  key: IDM_ADMIN_PASSWORD
+          volumeMounts:
+            - name: data
+              mountPath: /etc/opencloud
+              subPath: etc
+            - name: data
+              mountPath: /var/lib/opencloud
+              subPath: lib
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: opencloud-data
