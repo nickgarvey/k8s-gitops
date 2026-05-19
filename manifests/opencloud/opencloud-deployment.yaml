@@ -92,7 +92,7 @@ spec:
             - name: STORAGE_USERS_DRIVER
               value: decomposeds3
             - name: STORAGE_USERS_DECOMPOSEDS3_ENDPOINT
-              value: http://router.home.arpa:7777
+              value: http://storj-gateway.home.arpa:7777
             - name: STORAGE_USERS_DECOMPOSEDS3_REGION
               value: us-east-1
             - name: STORAGE_USERS_DECOMPOSEDS3_BUCKET
