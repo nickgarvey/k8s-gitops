@@ -26,3 +26,25 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: ngarvey-homelab
 value: "10"
+---
+# Auto-delete orphaned replica data directories and orphaned runtime instances.
+# Orphans are stale replica copies left behind by rebuilds/relocations or
+# interrupted cleanups; with this off they accumulate and consume disk.
+apiVersion: longhorn.io/v1beta2
+kind: Setting
+metadata:
+  name: orphan-resource-auto-deletion
+  namespace: longhorn-system
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+value: "replica-data;instance"
+---
+# Retention before an orphan is deleted (seconds). 2 days = 172800s.
+apiVersion: longhorn.io/v1beta2
+kind: Setting
+metadata:
+  name: orphan-resource-auto-deletion-grace-period
+  namespace: longhorn-system
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+value: "172800"
