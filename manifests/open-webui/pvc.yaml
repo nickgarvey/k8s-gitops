@@ -11,4 +11,4 @@ spec:
   storageClassName: longhorn-wffc
   resources:
     requests:
-      storage: 100Gi
+      storage: 5Gi
