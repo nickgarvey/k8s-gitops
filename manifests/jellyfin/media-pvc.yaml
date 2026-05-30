@@ -1,15 +1,15 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: smb-media-pvc
-  namespace: plex
+  name: jellyfin-media
+  namespace: jellyfin
   labels:
     app.kubernetes.io/managed-by: ngarvey-homelab
 spec:
   accessModes:
-    - ReadOnlyMany
+    - ReadWriteMany
   storageClassName: ""
-  volumeName: smb-media-pv
+  volumeName: smb-media-pv-jellyfin
   resources:
     requests:
       storage: 1000Gi

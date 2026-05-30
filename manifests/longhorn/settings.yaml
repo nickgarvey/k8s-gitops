@@ -15,3 +15,14 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: ngarvey-homelab
 value: "2"
+---
+# Reserve 10% of each default disk; the remaining ~90% is schedulable for Longhorn
+# replicas. Applies only to newly-created default disks.
+apiVersion: longhorn.io/v1beta2
+kind: Setting
+metadata:
+  name: storage-reserved-percentage-for-default-disk
+  namespace: longhorn-system
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+value: "10"

@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+  namespace: jellyfin
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: jellyfin
+  template:
+    metadata:
+      labels:
+        app: jellyfin
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      initContainers:
+        # Seeds/enforces Jellyfin config files before the server starts:
+        #   network.xml  - IPv6-only pod network: seed EnableIPv6=true so Jellyfin
+        #                  binds the pod's IPv6 interface. Seed only if absent, so
+        #                  UI network changes are preserved afterward.
+        #   encoding.xml - Intel iGPU transcoding: seed the whole file if absent,
+        #                  otherwise force <HardwareAccelerationType> to vaapi on
+        #                  every boot. Other encoding fields stay UI-editable; the
+        #                  GPU toggle is owned by gitops and reverts on restart.
+        - name: seed-config
+          image: jellyfin/jellyfin:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /config/config
+              if [ ! -f /config/config/network.xml ]; then
+                cp /seed-network/network.xml /config/config/network.xml
+                echo "seeded network.xml"
+              else
+                echo "network.xml already present; leaving as-is"
+              fi
+              if [ ! -f /config/config/encoding.xml ]; then
+                cp /seed-encoding/encoding.xml /config/config/encoding.xml
+                echo "seeded encoding.xml (vaapi)"
+              else
+                sed -i 's#<HardwareAccelerationType>[^<]*</HardwareAccelerationType>#<HardwareAccelerationType>vaapi</HardwareAccelerationType>#' /config/config/encoding.xml
+                echo "enforced HardwareAccelerationType=vaapi in existing encoding.xml"
+              fi
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: network-seed
+              mountPath: /seed-network
+            - name: encoding-seed
+              mountPath: /seed-encoding
+      containers:
+        - name: jellyfin
+          image: jellyfin/jellyfin:latest
+          ports:
+            - containerPort: 8096
+              name: http
+              protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8096
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8096
+            periodSeconds: 60
+            failureThreshold: 3
+          # Requires Intel GPU Device Plugin:
+          # kubectl apply -k 'https://github.com/intel/intel-device-plugins-for-kubernetes/deployments/gpu_plugin?ref=v0.31.0'
+          resources:
+            limits:
+              gpu.intel.com/i915: 1
+          env:
+            - name: TZ
+              value: "America/Los_Angeles"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: cache
+              mountPath: /cache
+            - name: media
+              mountPath: /media
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: jellyfin-config
+        - name: cache
+          emptyDir: {}
+        - name: media
+          persistentVolumeClaim:
+            claimName: jellyfin-media
+        - name: network-seed
+          configMap:
+            name: jellyfin-network-config
+        - name: encoding-seed
+          configMap:
+            name: jellyfin-encoding-config
