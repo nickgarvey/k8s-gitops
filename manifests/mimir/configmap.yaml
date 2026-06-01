@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mimir-config
+  namespace: mimir
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+data:
+  mimir.yaml: |
+    # Single-binary (monolithic) Mimir for long-term Prometheus storage.
+    # Started with -target=all (distributor, ingester, querier, query-frontend,
+    # query-scheduler, store-gateway, compactor, ruler -- NOT alertmanager).
+    # Credentials are injected from env via -config.expand-env=true.
+
+    multitenancy_enabled: false
+
+    # We run as uid 65534 with a read-only working dir; the activity tracker
+    # defaults to ./metrics-activity.log (not writable). Put it on the PVC.
+    activity_tracker:
+      filepath: /data/metrics-activity.log
+
+    # Shared object storage on the Storj S3 gateway (plain HTTP, IPv6-reachable).
+    # A single bucket "mimir" is shared by blocks + ruler via distinct
+    # storage_prefix values (Mimir refuses the same bucket+prefix for both).
+    common:
+      storage:
+        backend: s3
+        s3:
+          endpoint: storj-gateway.home.arpa:7777
+          region: us-east-1
+          insecure: true
+          access_key_id: ${GATEWAY_S3_ACCESS_KEY}
+          secret_access_key: ${GATEWAY_S3_SECRET_KEY}
+          bucket_name: mimir
+
+    blocks_storage:
+      storage_prefix: blocks
+      tsdb:
+        dir: /data/tsdb
+      bucket_store:
+        sync_dir: /data/tsdb-sync
+
+    ruler_storage:
+      storage_prefix: ruler
+
+    compactor:
+      data_dir: /data/compactor
+      sharding_ring:
+        instance_addr: ${POD_IP}
+
+    # Single replica: no data replication across ingesters.
+    ingester:
+      ring:
+        replication_factor: 1
+        instance_addr: ${POD_IP}
+
+    # Pin every hash ring's instance address to the pod's IPv6. Mimir's ring
+    # lifecycler otherwise auto-detects via eth0 and only accepts IPv4, which
+    # fails on this IPv6-only cluster ("no useable address found").
+    distributor:
+      ring:
+        instance_addr: ${POD_IP}
+
+    store_gateway:
+      sharding_ring:
+        instance_addr: ${POD_IP}
+
+    ruler:
+      # rule_path defaults to ./data-ruler/ (read-only workdir); use the PVC.
+      rule_path: /data/ruler
+      ring:
+        instance_addr: ${POD_IP}
+
+    # query-frontend advertises its address to queriers; same IPv6 pin.
+    # (In the frontend block this key is "address", not "instance_addr".)
+    frontend:
+      address: ${POD_IP}
+
+    server:
+      # IPv6-only cluster: bind v6 explicitly (see Jellyfin EnableIPv6 lesson).
+      http_listen_address: "::"
+      http_listen_port: 8080
+      grpc_listen_address: "::"
+      grpc_listen_port: 9095
+
+    # memberlist is the ring KV store. Advertise the pod's IPv6 (POD_IP) so the
+    # single-node ring forms reliably on an IPv6-only network.
+    memberlist:
+      bind_addr:
+        - "::"
+      advertise_addr: ${POD_IP}
+
+    limits:
+      # Keep blocks forever for now; tune compactor_blocks_retention_period later.
+      compactor_blocks_retention_period: 0

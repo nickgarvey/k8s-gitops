@@ -1,0 +1,46 @@
+# Headless service governing the StatefulSet (stable pod DNS + memberlist).
+apiVersion: v1
+kind: Service
+metadata:
+  name: mimir-headless
+  namespace: mimir
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+    app.kubernetes.io/name: mimir
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: mimir
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+    - name: grpc
+      protocol: TCP
+      port: 9095
+      targetPort: 9095
+---
+# ClusterIP for clients: Prometheus remote_write target and the query API
+# (Prometheus-compatible, under /prometheus) for a Grafana datasource.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mimir
+  namespace: mimir
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+    app.kubernetes.io/name: mimir
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: mimir
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+    - name: grpc
+      protocol: TCP
+      port: 9095
+      targetPort: 9095

@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mimir
+  namespace: mimir
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+    app.kubernetes.io/name: mimir
+spec:
+  serviceName: mimir-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mimir
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mimir
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+      containers:
+        - name: mimir
+          image: grafana/mimir:latest
+          args:
+            - -config.file=/etc/mimir/mimir.yaml
+            - -config.expand-env=true
+            - -target=all
+          env:
+            # Advertised to memberlist; status.podIP is the pod's IPv6.
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: GATEWAY_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mimir-storage
+                  key: GATEWAY_S3_ACCESS_KEY
+            - name: GATEWAY_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mimir-storage
+                  key: GATEWAY_S3_SECRET_KEY
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: grpc
+              containerPort: 9095
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/mimir
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: mimir-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        storageClassName: longhorn-wffc
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 20Gi
