@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: grafana
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      # Long-term store (Mimir on Storj). Prometheus-compatible query API lives
+      # under /prometheus; multitenancy is off so the tenant is "anonymous".
+      - name: Mimir
+        type: prometheus
+        access: proxy
+        url: http://mimir.mimir.svc:8080/prometheus
+        isDefault: true
+        jsonData:
+          httpHeaderName1: X-Scope-OrgID
+        secureJsonData:
+          httpHeaderValue1: anonymous
+      # Local Prometheus (rolling 7d) for fast recent queries.
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus.prometheus.svc:9090

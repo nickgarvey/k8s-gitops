@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  namespace: grafana
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+  annotations:
+    tailscale.com/http-redirect: "true"
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - grafana
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 80
