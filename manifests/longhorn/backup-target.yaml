@@ -6,5 +6,5 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: ngarvey-homelab
 spec:
-  backupTargetURL: nfs://microatx.home.arpa:/slow/backups/longhorn
+  backupTargetURL: nfs://lydia.home.arpa:/slow/backups/longhorn
   pollInterval: 5m0s
