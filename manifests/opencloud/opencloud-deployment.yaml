@@ -42,6 +42,41 @@ spec:
           volumeMounts:
             - name: caddy-certs
               mountPath: /certs
+        # Initialise config + secrets ONLY on a fresh PVC. The existence guard
+        # makes this idempotent: on an already-provisioned volume it is a no-op,
+        # so re-applying can never regenerate secrets out of sync with the IDM
+        # boltdb (the bug that caused the login 500). Replaces the old standalone
+        # init Job and its broken `--force-overwrite no` (a value-less bool flag).
+        - name: opencloud-init
+          image: opencloudeu/opencloud-rolling:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+          command: ["sh", "-c"]
+          args:
+            - |
+              if [ -e /etc/opencloud/opencloud.yaml ]; then
+                echo "config present, skipping init"; exit 0
+              fi
+              exec opencloud init --insecure yes
+          env:
+            - name: OC_CONFIG_DIR
+              value: /etc/opencloud
+            - name: OC_BASE_DATA_PATH
+              value: /var/lib/opencloud
+            - name: IDM_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: opencloud-storage
+                  key: IDM_ADMIN_PASSWORD
+          volumeMounts:
+            - name: data
+              mountPath: /etc/opencloud
+              subPath: etc
+            - name: data
+              mountPath: /var/lib/opencloud
+              subPath: lib
       containers:
         - name: caddy
           image: caddy:2-alpine
