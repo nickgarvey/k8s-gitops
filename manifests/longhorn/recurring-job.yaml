@@ -5,7 +5,7 @@ metadata:
   namespace: longhorn-system
 spec:
   task: "backup"
-  cron: "30 02 * * *"     # 02:30 UTC; adjust for your desired local time
+  cron: "0 09 * * *"      # 09:00 UTC; adjust for your desired local time
   retain: 14              # keep last 14 backups per volume
   concurrency: 2          # parallelism across volumes
   groups:
