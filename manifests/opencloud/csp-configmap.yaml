@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opencloud-csp
+  namespace: opencloud
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+data:
+  # Upstream default (services/proxy/pkg/config/csp.yaml) with the authentik
+  # origin added to connect-src and frame-src so the web UI can talk to the
+  # external IDP (silent token renew runs in an iframe).
+  csp.yaml: |
+    directives:
+      child-src:
+        - '''self'''
+      connect-src:
+        - '''self'''
+        - 'blob:'
+        - 'https://raw.githubusercontent.com/opencloud-eu/awesome-apps/'
+        - 'https://update.opencloud.eu/'
+        - 'https://authentik.bigeye-turtle.ts.net/'
+      default-src:
+        - '''none'''
+      font-src:
+        - '''self'''
+      frame-ancestors:
+        - '''self'''
+      frame-src:
+        - '''self'''
+        - 'blob:'
+        - 'https://embed.diagrams.net/'
+        - 'https://authentik.bigeye-turtle.ts.net/'
+      img-src:
+        - '''self'''
+        - 'data:'
+        - 'blob:'
+        - 'https://raw.githubusercontent.com/opencloud-eu/awesome-apps/'
+      manifest-src:
+        - '''self'''
+      media-src:
+        - '''self'''
+      object-src:
+        - '''self'''
+        - 'blob:'
+      script-src:
+        - '''self'''
+        - '''unsafe-inline'''
+      style-src:
+        - '''self'''
+        - '''unsafe-inline'''

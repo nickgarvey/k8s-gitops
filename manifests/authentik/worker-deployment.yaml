@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authentik-worker
+  namespace: authentik
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: authentik-worker
+  template:
+    metadata:
+      labels:
+        app: authentik-worker
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      containers:
+        - name: authentik
+          image: ghcr.io/goauthentik/server:2026.5.3
+          imagePullPolicy: IfNotPresent
+          args: ["worker"]
+          # The worker is what discovers and applies blueprints from
+          # /blueprints; AUTHENTIK_BOOTSTRAP_* and NGARVEY_INITIAL_PASSWORD
+          # (used via !Env in the blueprint) must be visible here.
+          envFrom:
+            - secretRef:
+                name: authentik-core
+          env:
+            - name: AUTHENTIK_POSTGRESQL__HOST
+              value: authentik-postgres
+            - name: AUTHENTIK_POSTGRESQL__USER
+              value: authentik
+            - name: AUTHENTIK_POSTGRESQL__NAME
+              value: authentik
+            - name: AUTHENTIK_DISABLE_UPDATE_CHECK
+              value: "true"
+          volumeMounts:
+            - name: blueprints
+              mountPath: /blueprints/custom
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: blueprints
+          configMap:
+            name: authentik-blueprints

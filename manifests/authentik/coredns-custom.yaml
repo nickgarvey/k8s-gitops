@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+data:
+  # k3s CoreDNS imports /etc/coredns/custom/*.override into the .:53 block.
+  # ts.net names do not resolve from inside the cluster (Tailscale MagicDNS is
+  # tailnet-only), but opencloud must reach authentik's OIDC issuer URL
+  # server-side. Rewrite the public name to the in-cluster Service; `exact`
+  # rewrites are answer-rewritten automatically so clients only see the ts.net
+  # name. Requires a coredns rollout restart to pick up changes.
+  authentik.override: |
+    rewrite name exact authentik.bigeye-turtle.ts.net authentik.authentik.svc.cluster.local

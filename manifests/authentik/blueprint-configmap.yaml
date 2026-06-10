@@ -1,0 +1,227 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authentik-blueprints
+  namespace: authentik
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+data:
+  opencloud.yaml: |
+    version: 1
+    metadata:
+      name: homelab-opencloud
+      labels:
+        blueprints.goauthentik.io/description: "OpenCloud OIDC client + homelab user"
+    entries:
+      # Own superuser group; avoids depending on the default
+      # "authentik Admins" group name.
+      - model: authentik_core.group
+        state: present
+        id: group-homelab-admins
+        identifiers:
+          name: homelab-admins
+        attrs:
+          name: homelab-admins
+          is_superuser: true
+      # Membership in this group maps to the opencloudAdmin role claim below.
+      - model: authentik_core.group
+        state: present
+        id: group-opencloud-admin
+        identifiers:
+          name: opencloudAdmin
+        attrs:
+          name: opencloudAdmin
+      - model: authentik_core.user
+        state: present
+        identifiers:
+          username: ngarvey
+        attrs:
+          username: ngarvey
+          name: Nick Garvey
+          email: garvey.nick@gmail.com
+          is_active: true
+          # NOTE: blueprint re-applies reset the password to this value; the
+          # secret value is the real password of record.
+          password: !Env NGARVEY_INITIAL_PASSWORD
+          groups:
+            - !KeyOf group-homelab-admins
+            - !KeyOf group-opencloud-admin
+      # Bound to scope_name "profile" so every OpenCloud client (web, desktop,
+      # mobile all request profile) receives the roles claim in ID and access
+      # tokens. Consumed via PROXY_ROLE_ASSIGNMENT_OIDC_CLAIM=roles.
+      - model: authentik_providers_oauth2.scopemapping
+        state: present
+        id: scope-opencloud-roles
+        identifiers:
+          name: OpenCloud roles
+        attrs:
+          name: OpenCloud roles
+          scope_name: profile
+          description: roles claim consumed by OpenCloud
+          expression: |
+            if ak_is_group_member(request.user, name="opencloudAdmin"):
+                return {"roles": ["opencloudAdmin"]}
+            return {"roles": ["opencloudUser"]}
+      # OpenCloud requires a public client + PKCE with predefined client id
+      # "web"; OC_OIDC_CLIENT_ID=web makes desktop/mobile reuse it.
+      - model: authentik_providers_oauth2.oauth2provider
+        state: present
+        id: provider-opencloud
+        identifiers:
+          name: OpenCloud
+        attrs:
+          name: OpenCloud
+          client_type: public
+          client_id: web
+          # Model default is an EMPTY list, which rejects every flow with
+          # "Invalid grant_type for provider" -- must be set explicitly.
+          grant_types:
+            - authorization_code
+            - refresh_token
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+          access_code_validity: minutes=10
+          access_token_validity: hours=24
+          refresh_token_validity: days=30
+          sub_mode: hashed_user_id
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-offline_access]]
+            - !KeyOf scope-opencloud-roles
+          redirect_uris:
+            - matching_mode: strict
+              url: https://opencloud.bigeye-turtle.ts.net/
+            - matching_mode: strict
+              url: https://opencloud.bigeye-turtle.ts.net/oidc-callback.html
+            - matching_mode: strict
+              url: https://opencloud.bigeye-turtle.ts.net/oidc-silent-redirect.html
+      # Slug defines the issuer path: /application/o/opencloud/
+      - model: authentik_core.application
+        state: present
+        identifiers:
+          slug: opencloud
+        attrs:
+          name: OpenCloud
+          slug: opencloud
+          provider: !KeyOf provider-opencloud
+          policy_engine_mode: any
+      # Native clients identify with their own predefined client ids (they do
+      # not use OC_OIDC_CLIENT_ID). authentik resolves the provider at
+      # /application/o/authorize/ by client_id, so these share the issuer
+      # /application/o/opencloud/ that the server advertises; each provider
+      # still needs its own application shell.
+      - model: authentik_providers_oauth2.oauth2provider
+        state: present
+        id: provider-opencloud-desktop
+        identifiers:
+          name: OpenCloud Desktop
+        attrs:
+          name: OpenCloud Desktop
+          client_type: public
+          client_id: OpenCloudDesktop
+          grant_types:
+            - authorization_code
+            - refresh_token
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+          access_code_validity: minutes=10
+          access_token_validity: hours=24
+          refresh_token_validity: days=30
+          sub_mode: hashed_user_id
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-offline_access]]
+            - !KeyOf scope-opencloud-roles
+          redirect_uris:
+            # Desktop client binds a random localhost port
+            - matching_mode: regex
+              url: ^http://(127\.0\.0\.1|localhost)(:\d+)?(/.*)?$
+      - model: authentik_core.application
+        state: present
+        identifiers:
+          slug: opencloud-desktop
+        attrs:
+          name: OpenCloud Desktop
+          slug: opencloud-desktop
+          provider: !KeyOf provider-opencloud-desktop
+          policy_engine_mode: any
+      - model: authentik_providers_oauth2.oauth2provider
+        state: present
+        id: provider-opencloud-ios
+        identifiers:
+          name: OpenCloud iOS
+        attrs:
+          name: OpenCloud iOS
+          client_type: public
+          client_id: OpenCloudIOS
+          grant_types:
+            - authorization_code
+            - refresh_token
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+          access_code_validity: minutes=10
+          access_token_validity: hours=24
+          refresh_token_validity: days=30
+          sub_mode: hashed_user_id
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-offline_access]]
+            - !KeyOf scope-opencloud-roles
+          redirect_uris:
+            - matching_mode: strict
+              url: oc://ios.opencloud.eu
+      - model: authentik_core.application
+        state: present
+        identifiers:
+          slug: opencloud-ios
+        attrs:
+          name: OpenCloud iOS
+          slug: opencloud-ios
+          provider: !KeyOf provider-opencloud-ios
+          policy_engine_mode: any
+      - model: authentik_providers_oauth2.oauth2provider
+        state: present
+        id: provider-opencloud-android
+        identifiers:
+          name: OpenCloud Android
+        attrs:
+          name: OpenCloud Android
+          client_type: public
+          client_id: OpenCloudAndroid
+          grant_types:
+            - authorization_code
+            - refresh_token
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+          access_code_validity: minutes=10
+          access_token_validity: hours=24
+          refresh_token_validity: days=30
+          sub_mode: hashed_user_id
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-offline_access]]
+            - !KeyOf scope-opencloud-roles
+          redirect_uris:
+            - matching_mode: strict
+              url: oc://android.opencloud.eu
+      - model: authentik_core.application
+        state: present
+        identifiers:
+          slug: opencloud-android
+        attrs:
+          name: OpenCloud Android
+          slug: opencloud-android
+          provider: !KeyOf provider-opencloud-android
+          policy_engine_mode: any

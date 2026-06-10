@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: authentik
+  namespace: authentik
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  selector:
+    app: authentik-server
+  ports:
+    # Tailscale ingress backend (Tailscale terminates TLS)
+    - name: http
+      port: 80
+      targetPort: 9000
+    # In-cluster OIDC backchannel: coredns-custom rewrites
+    # authentik.bigeye-turtle.ts.net to this Service, and opencloud fetches
+    # the discovery doc over authentik's self-signed TLS (OC_INSECURE=true).
+    - name: https
+      port: 443
+      targetPort: 9443

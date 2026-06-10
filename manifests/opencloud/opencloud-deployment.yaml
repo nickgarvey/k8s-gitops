@@ -124,6 +124,49 @@ spec:
               value: "false"
             - name: OC_INSECURE
               value: "true"
+            # --- external OIDC via authentik ---
+            # The issuer hostname resolves in-cluster through the coredns-custom
+            # rewrite (manifests/authentik/coredns-custom.yaml) to the authentik
+            # Service's self-signed 9443 port; OC_INSECURE above covers that.
+            - name: OC_OIDC_ISSUER
+              value: https://authentik.bigeye-turtle.ts.net/application/o/opencloud/
+            # Fallback client id for all platforms (web/desktop/mobile)
+            - name: OC_OIDC_CLIENT_ID
+              value: web
+            # Built-in IDP off; idm stays (stores autoprovisioned users)
+            - name: OC_EXCLUDE_RUN_SERVICES
+              value: idp
+            - name: PROXY_OIDC_REWRITE_WELLKNOWN
+              value: "true"
+            - name: PROXY_AUTOPROVISION_ACCOUNTS
+              value: "true"
+            - name: GRAPH_USERNAME_MATCH
+              value: none
+            - name: PROXY_USER_OIDC_CLAIM
+              value: preferred_username
+            - name: PROXY_USER_CS3_CLAIM
+              value: username
+            # Admin/user roles come from the "roles" claim emitted by the
+            # authentik "OpenCloud roles" scope mapping (blueprint).
+            - name: PROXY_ROLE_ASSIGNMENT_DRIVER
+              value: oidc
+            - name: PROXY_ROLE_ASSIGNMENT_OIDC_CLAIM
+              value: roles
+            - name: GRAPH_ASSIGN_DEFAULT_USER_ROLE
+              value: "false"
+            # authentik stamps tokens with a per-application issuer
+            # (/application/o/opencloud-desktop/ for the desktop client), so
+            # local JWT verification rejects every non-web client with "invalid
+            # issuer". Validate access tokens via the userinfo endpoint instead.
+            - name: PROXY_OIDC_ACCESS_TOKEN_VERIFY_METHOD
+              value: none
+            - name: WEB_OIDC_SCOPE
+              value: openid profile email offline_access
+            # App tokens for WebDAV/rclone (opencloud auth-app create ...)
+            - name: PROXY_ENABLE_APP_AUTH
+              value: "true"
+            - name: PROXY_CSP_CONFIG_FILE_LOCATION
+              value: /etc/opencloud/csp.yaml
             - name: STORAGE_USERS_DRIVER
               value: decomposeds3
             - name: STORAGE_USERS_DECOMPOSEDS3_ENDPOINT
@@ -154,6 +197,11 @@ spec:
             - name: data
               mountPath: /var/lib/opencloud
               subPath: lib
+            # subPath so the PVC-backed /etc/opencloud isn't shadowed
+            - name: csp-config
+              mountPath: /etc/opencloud/csp.yaml
+              subPath: csp.yaml
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /
@@ -180,3 +228,6 @@ spec:
           emptyDir: {}
         - name: caddy-certs
           emptyDir: {}
+        - name: csp-config
+          configMap:
+            name: opencloud-csp

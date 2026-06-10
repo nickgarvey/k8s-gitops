@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authentik-server
+  namespace: authentik
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: authentik-server
+  template:
+    metadata:
+      labels:
+        app: authentik-server
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      containers:
+        - name: authentik
+          # Pin exact version: authentik upgrades require ordered migrations,
+          # never use :latest. 2026.5 binds [::] by default (IPv6-only cluster
+          # safe) -- do not set AUTHENTIK_LISTEN__*.
+          image: ghcr.io/goauthentik/server:2026.5.3
+          imagePullPolicy: IfNotPresent
+          args: ["server"]
+          envFrom:
+            - secretRef:
+                name: authentik-core
+          env:
+            - name: AUTHENTIK_POSTGRESQL__HOST
+              value: authentik-postgres
+            - name: AUTHENTIK_POSTGRESQL__USER
+              value: authentik
+            - name: AUTHENTIK_POSTGRESQL__NAME
+              value: authentik
+            - name: AUTHENTIK_DISABLE_UPDATE_CHECK
+              value: "true"
+          ports:
+            - containerPort: 9000
+              name: http
+            - containerPort: 9443
+              name: https
+          livenessProbe:
+            httpGet:
+              path: /-/health/live/
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+          readinessProbe:
+            httpGet:
+              path: /-/health/ready/
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+          volumeMounts:
+            - name: blueprints
+              mountPath: /blueprints/custom
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 700Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+      volumes:
+        - name: blueprints
+          configMap:
+            name: authentik-blueprints
