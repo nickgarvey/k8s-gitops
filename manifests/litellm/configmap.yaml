@@ -10,8 +10,8 @@ data:
     model_list:
       - model_name: local-gpu
         litellm_params:
-          model: openai/llama-cpp
-          api_base: http://llama-cpp.home.arpa:8080/v1
+          model: openai/vllm
+          api_base: http://llm.home.arpa:8000/v1
           api_key: sk-unused
     litellm_settings:
       drop_params: true
