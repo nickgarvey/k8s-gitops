@@ -48,7 +48,7 @@ spec:
         # boltdb (the bug that caused the login 500). Replaces the old standalone
         # init Job and its broken `--force-overwrite no` (a value-less bool flag).
         - name: opencloud-init
-          image: opencloudeu/opencloud-rolling:latest
+          image: opencloudeu/opencloud-rolling:7.1.0
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 1000
@@ -104,7 +104,7 @@ spec:
           securityContext:
             runAsUser: 1000
             runAsGroup: 1000
-          image: opencloudeu/opencloud-rolling:latest
+          image: opencloudeu/opencloud-rolling:7.1.0
           imagePullPolicy: IfNotPresent
           command: ["opencloud"]
           args: ["server"]
