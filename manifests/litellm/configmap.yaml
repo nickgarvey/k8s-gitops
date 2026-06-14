@@ -11,7 +11,7 @@ data:
       - model_name: local-gpu
         litellm_params:
           model: openai/llama-cpp
-          api_base: http://tarrasque.home.arpa:8080/v1
+          api_base: http://llama-cpp.home.arpa:8080/v1
           api_key: sk-unused
     litellm_settings:
       drop_params: true
