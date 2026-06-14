@@ -11,9 +11,19 @@ data:
       "distSpecVersion": "1.1.0",
       "storage": {
         "rootDirectory": "/var/lib/zot",
+        "dedupe": false,
         "gc": true,
         "gcDelay": "1h",
-        "gcInterval": "24h"
+        "gcInterval": "24h",
+        "storageDriver": {
+          "name": "s3",
+          "rootdirectory": "/zot",
+          "region": "garage",
+          "regionendpoint": "http://garage.home.arpa:3900",
+          "bucket": "zot",
+          "secure": false,
+          "forcepathstyle": true
+        }
       },
       "http": {
         "address": "0.0.0.0",
@@ -27,10 +37,7 @@ data:
           "enable": true
         },
         "search": {
-          "enable": true,
-          "cve": {
-            "updateInterval": "24h"
-          }
+          "enable": true
         },
         "scrub": {
           "enable": true,

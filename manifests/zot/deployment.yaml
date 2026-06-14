@@ -24,6 +24,17 @@ spec:
           args:
             - serve
             - /etc/zot/config.json
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: zot-s3
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: zot-s3
+                  key: AWS_SECRET_ACCESS_KEY
           ports:
             - containerPort: 5000
               name: http
@@ -47,8 +58,7 @@ spec:
             periodSeconds: 5
       volumes:
         - name: zot-data
-          persistentVolumeClaim:
-            claimName: zot-data
+          emptyDir: {}
         - name: zot-config
           configMap:
             name: zot-config
