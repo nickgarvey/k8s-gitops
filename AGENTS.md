@@ -71,28 +71,28 @@ Configuration: `manifests/metallb/config.yaml`
 
 # Container Registry (zot)
 
-Registry: `zot.zot.k8s.home.arpa`
+Registry: `oci.garvey.sh` (TLS, Let's Encrypt prod cert)
 
 ## Quick Commands
 
 List all repositories:
 ```bash
-curl -s http://zot.zot.k8s.home.arpa/v2/_catalog | jq
+curl -s https://oci.garvey.sh/v2/_catalog | jq
 ```
 
 List tags (requires skopeo from nix environment):
 ```bash
-nix develop --command skopeo list-tags docker://zot.zot.k8s.home.arpa/<repo> --tls-verify=false
+nix develop --command skopeo list-tags docker://oci.garvey.sh/<repo>
 ```
 
 Pull with podman:
 ```bash
-podman pull zot.zot.k8s.home.arpa/<repo>:<tag> --tls-verify=false
+podman pull oci.garvey.sh/<repo>:<tag>
 ```
 
 Push with podman:
 ```bash
-podman tag <image>:<tag> zot.zot.k8s.home.arpa/<repo>:<tag>
-podman push zot.zot.k8s.home.arpa/<repo>:<tag> --tls-verify=false
+podman tag <image>:<tag> oci.garvey.sh/<repo>:<tag>
+podman push oci.garvey.sh/<repo>:<tag>
 ```
 

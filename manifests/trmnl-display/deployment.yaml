@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: trmnl-display
-          image: zot.zot.k8s.home.arpa/trmnl-display:latest
+          image: oci.garvey.sh/trmnl-display:latest
           env:
             - name: TZ
               value: America/Los_Angeles
