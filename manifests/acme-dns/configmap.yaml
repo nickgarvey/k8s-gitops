@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: acme-dns-config
+  namespace: acme-dns
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+data:
+  config.cfg: |
+    [general]
+    listen = "0.0.0.0:53"
+    protocol = "both"
+    domain = "acme.garvey.sh"
+    nsname = "acme.garvey.sh"
+    # admin email, with @ replaced by .
+    nsadmin = "garvey.nick.gmail.com"
+    # The advertised A record is the stable public IPv4. Let's Encrypt reaches
+    # it via the router's IPv4 DNAT -> acme-dns-proxy -> this pod's IPv6 LB.
+    records = [
+        "acme.garvey.sh. A 64.186.8.205",
+        "acme.garvey.sh. NS acme.garvey.sh.",
+    ]
+    debug = false
+
+    [database]
+    engine = "sqlite3"
+    connection = "/var/lib/acme-dns/acme-dns.db"
+
+    [api]
+    ip = "0.0.0.0"
+    port = "80"
+    # tls MUST stay "none": the API is ClusterIP-only and must never depend on
+    # a cert-manager cert, or we rebuild the bootstrap deadlock.
+    tls = "none"
+    # Registration locked: oci.garvey.sh is registered (credentials persist in the
+    # PVC). To add a host later, flip to false, rollout restart, register, flip back.
+    disable_registration = true
+
+    [logconfig]
+    loglevel = "info"
+    logtype = "stdout"
+    logformat = "text"

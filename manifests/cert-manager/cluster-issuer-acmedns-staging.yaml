@@ -1,0 +1,22 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-acmedns-staging
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: garvey.nick@gmail.com
+    privateKeySecretRef:
+      name: le-acmedns-staging-key
+    solvers:
+      - dns01:
+          acmeDNS:
+            # Plain HTTP to the internal API service — keeps the API out of any
+            # TLS bootstrap loop. The acmedns account secret lives in this
+            # (cert-manager) namespace.
+            host: http://acme-dns-api.acme-dns.svc.cluster.local
+            accountSecretRef:
+              name: acme-dns
+              key: acmedns.json

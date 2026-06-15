@@ -1,0 +1,44 @@
+# Strategic-merge patch for the cert-manager controller Deployment.
+#
+# Why: the cluster is IPv6-only and acme.garvey.sh has an IPv4-only A record.
+# cert-manager's default DNS-01 self-check queries the authoritative server
+# (64.186.8.205) directly -> NAT64 -> our own WAN IP -> router input reject
+# ("permission denied"), so DNS-01 challenges never advance. These two args make
+# the self-check use cluster CoreDNS (fd43::a) as a recursive resolver instead;
+# CoreDNS -> node -> Blocky -> upstream resolves the public delegation/TXT that
+# Let's Encrypt itself also uses. (LE's own validation was never the problem.)
+#
+# Apply AFTER the pristine vendored base (vendor/cert-manager/cert-manager.yaml):
+#   kubectl patch deploy cert-manager -n cert-manager --type=strategic \
+#     --patch-file manifests/cert-manager/cert-manager-controller-recursive-ns.patch.yaml
+#
+# args is a scalar list (no strategic merge key), so it is REPLACED wholesale —
+# the first 5 entries mirror upstream v1.20.1 and must be kept in sync on upgrade.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cert-manager
+  namespace: cert-manager
+spec:
+  template:
+    spec:
+      containers:
+        - name: cert-manager-controller
+          args:
+            - --v=2
+            - --cluster-resource-namespace=$(POD_NAMESPACE)
+            - --leader-election-namespace=kube-system
+            - --acme-http01-solver-image=quay.io/jetstack/cert-manager-acmesolver:v1.20.1
+            - --max-concurrent-challenges=60
+            - --dns01-recursive-nameservers-only
+            # fd43::a is the kube-dns Service ClusterIP (CoreDNS), i.e. the same
+            # resolver every pod uses. It is NOT a magic constant: Kubernetes/k3s
+            # assigns cluster DNS the 10th address of the Service CIDR, and ours
+            # is fd43::/112 (k3s --service-cidr in nix-configs k3s-common.nix), so
+            # 10 == 0xa == fd43::a. ClusterIPs are sticky (stored in etcd), so this
+            # survives pod restarts / CoreDNS + cert-manager upgrades. It would only
+            # change if the Service CIDR changes (a cluster rebuild). To re-derive:
+            #   kubectl -n kube-system get svc kube-dns -o jsonpath='{.spec.clusterIP}'
+            # Must be IP:port (cert-manager can't resolve a hostname for its own
+            # resolver list). Public fallback: [2606:4700:4700::1111]:53,[2001:4860:4860::8888]:53
+            - --dns01-recursive-nameservers=[fd43::a]:53

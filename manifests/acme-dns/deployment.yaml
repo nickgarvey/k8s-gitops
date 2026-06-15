@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acme-dns
+  namespace: acme-dns
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: acme-dns
+  template:
+    metadata:
+      labels:
+        app: acme-dns
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      containers:
+        - name: acme-dns
+          # Public registry + tag + IfNotPresent (repo convention). acme-dns is
+          # bootstrap-critical, so it never pulls from the in-cluster registry.
+          image: docker.io/joohoi/acme-dns:v1.0
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            capabilities:
+              add: ["NET_BIND_SERVICE"]
+          ports:
+            - containerPort: 53
+              protocol: UDP
+              name: dns-udp
+            - containerPort: 53
+              protocol: TCP
+              name: dns-tcp
+            - containerPort: 80
+              protocol: TCP
+              name: http-api
+          volumeMounts:
+            - name: config
+              mountPath: /etc/acme-dns
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/acme-dns
+          livenessProbe:
+            tcpSocket:
+              port: 53
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 53
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: acme-dns-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: acme-dns-data

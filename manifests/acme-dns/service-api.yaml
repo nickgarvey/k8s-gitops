@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: acme-dns-api
+  namespace: acme-dns
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  # Internal-only HTTP API. cert-manager writes TXT records here over plain
+  # HTTP, keeping the API out of any TLS bootstrap loop. NEVER expose publicly.
+  type: ClusterIP
+  selector:
+    app: acme-dns
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
