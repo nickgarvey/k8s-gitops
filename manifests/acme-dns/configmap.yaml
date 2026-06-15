@@ -32,9 +32,20 @@ data:
     # tls MUST stay "none": the API is ClusterIP-only and must never depend on
     # a cert-manager cert, or we rebuild the bootstrap deadlock.
     tls = "none"
-    # Registration locked: oci.garvey.sh is registered (credentials persist in the
-    # PVC). To add a host later, flip to false, rollout restart, register, flip back.
-    disable_registration = true
+    # Registration is intentionally LEFT OPEN so new hosts can be onboarded
+    # without the flip-restart-register-flip dance.
+    #
+    # SECURITY DEBT — HARDEN LATER. /register is unauthenticated and the API is
+    # only protected by being ClusterIP-only, so right now any in-cluster pod can
+    # register accounts (DB spam / abuse of acme.garvey.sh as TXT hosting). This
+    # does NOT let anyone touch existing accounts (writes need per-account creds +
+    # allowfrom), but it should not stay open indefinitely.
+    # Intended fix: put OIDC auth in front of /register (operator-only), while
+    # leaving /update open to in-cluster solver pods (cert-manager). A
+    # CiliumNetworkPolicy restricting the API to cert-manager is the simpler
+    # interim alternative if OIDC slips. Until then, treat open registration as
+    # temporary.
+    disable_registration = false
 
     [logconfig]
     loglevel = "info"

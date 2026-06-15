@@ -1,0 +1,15 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: zot-tls
+  namespace: zot
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  secretName: zot-tls
+  dnsNames:
+    - oci.garvey.sh
+  issuerRef:
+    # Staging validated cleanly on 2026-06-15; promoted to prod.
+    name: letsencrypt-acmedns-prod
+    kind: ClusterIssuer

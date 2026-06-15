@@ -27,7 +27,11 @@ data:
       },
       "http": {
         "address": "0.0.0.0",
-        "port": "5000"
+        "port": "443",
+        "tls": {
+          "cert": "/etc/zot/tls/tls.crt",
+          "key": "/etc/zot/tls/tls.key"
+        }
       },
       "log": {
         "level": "info"

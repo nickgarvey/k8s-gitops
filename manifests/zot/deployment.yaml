@@ -36,24 +36,36 @@ spec:
                   name: zot-s3
                   key: AWS_SECRET_ACCESS_KEY
           ports:
-            - containerPort: 5000
-              name: http
+            # zot terminates TLS itself and serves directly on 443. The image
+            # runs as root (User=0), so binding the privileged port needs no
+            # extra capability.
+            - containerPort: 443
+              name: https
           volumeMounts:
             - name: zot-data
               mountPath: /var/lib/zot
             - name: zot-config
               mountPath: /etc/zot
               readOnly: true
+            # TLS cert/key from the cert-manager-managed zot-tls Secret.
+            # NOTE: zot loads its cert only at startup and will not hot-reload a
+            # renewed Secret. No Reloader is installed, so after each ~60-day
+            # renewal run: kubectl rollout restart deploy/zot -n zot
+            - name: zot-tls
+              mountPath: /etc/zot/tls
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /v2/
-              port: 5000
+              port: 443
+              scheme: HTTPS
             initialDelaySeconds: 10
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /v2/
-              port: 5000
+              port: 443
+              scheme: HTTPS
             initialDelaySeconds: 5
             periodSeconds: 5
       volumes:
@@ -62,3 +74,6 @@ spec:
         - name: zot-config
           configMap:
             name: zot-config
+        - name: zot-tls
+          secret:
+            secretName: zot-tls
