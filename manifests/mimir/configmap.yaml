@@ -65,6 +65,18 @@ data:
       sharding_ring:
         instance_addr: ${POD_IP}
 
+    # Mimir 3.x added ring lifecyclers for the querier and query-scheduler.
+    # Pin both to the pod IPv6 too, otherwise they auto-detect via eth0 and
+    # crash the same way ("no useable address found"). The query-scheduler
+    # ring block is harmless when service discovery stays on dns (the default).
+    querier:
+      ring:
+        instance_addr: ${POD_IP}
+
+    query_scheduler:
+      ring:
+        instance_addr: ${POD_IP}
+
     ruler:
       # rule_path defaults to ./data-ruler/ (read-only workdir); use the PVC.
       rule_path: /data/ruler
