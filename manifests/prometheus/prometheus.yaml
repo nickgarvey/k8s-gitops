@@ -47,6 +47,9 @@ spec:
   # Enable admin API for lifecycle management
   enableAdminAPI: true
 
+  # Accept pushed samples from host-level Vector agents
+  enableRemoteWriteReceiver: true
+
   # AlertManager configuration
   alerting:
     alertmanagers:
