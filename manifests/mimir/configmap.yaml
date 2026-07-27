@@ -105,3 +105,10 @@ data:
     limits:
       # Keep blocks forever for now; tune compactor_blocks_retention_period later.
       compactor_blocks_retention_period: 0
+      # multitenancy_enabled is false above, so there's only ever one tenant
+      # (anonymous) here -- the per-tenant series cap exists to stop one
+      # tenant starving others on a shared cluster, which doesn't apply.
+      # 0 disables it; the real ceiling is now this pod's memory limit
+      # (see statefulset.yaml resources + the MimirApproachingMemoryLimit
+      # alert in manifests/prometheus/rules/mimir-memory.yaml).
+      max_global_series_per_user: 0

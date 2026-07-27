@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mimir-memory-alerts
+  namespace: prometheus
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+    prometheus: prometheus
+spec:
+  groups:
+    - name: mimir.memory
+      rules:
+        # The per-tenant series limit is disabled (single-tenant cluster), so
+        # memory is now the real ceiling on Mimir's cardinality growth.
+        - alert: MimirApproachingMemoryLimit
+          expr: |
+            container_memory_working_set_bytes{namespace="mimir", pod="mimir-0", container="mimir"}
+              / on(pod) kube_pod_container_resource_limits{namespace="mimir", pod="mimir-0", container="mimir", resource="memory"}
+              > 0.9
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Mimir is approaching its container memory limit"
+            description: "mimir-0 is using over 90% of its memory limit."
