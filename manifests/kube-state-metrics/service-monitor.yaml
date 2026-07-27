@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kube-state-metrics
+  namespace: kube-state-metrics
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+    app.kubernetes.io/name: kube-state-metrics
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kube-state-metrics
+  endpoints:
+    # honorLabels: kube-state-metrics exposes container/namespace/pod labels
+    # describing the *target* object, not the kube-state-metrics pod itself --
+    # without this, Prometheus's own scrape-target labels win and rename them
+    # to exported_container/exported_namespace/exported_pod (same reason the
+    # kubelet ServiceMonitor sets this).
+    - port: http-metrics
+      interval: 30s
+      honorLabels: true

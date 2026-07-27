@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-state-metrics
+  namespace: kube-state-metrics
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+    app.kubernetes.io/name: kube-state-metrics
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: kube-state-metrics
+  ports:
+    - name: http-metrics
+      port: 8080
+      targetPort: http-metrics
+    - name: telemetry
+      port: 8081
+      targetPort: telemetry
