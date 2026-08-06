@@ -15,7 +15,7 @@ data:
     # admin email, with @ replaced by .
     nsadmin = "garvey.nick.gmail.com"
     # The advertised A record is the stable public IPv4. Let's Encrypt reaches
-    # it via the router's IPv4 DNAT -> acme-dns-proxy -> this pod's IPv6 LB.
+    # it via the router's IPv4 DNAT -> public-dns-proxy -> this pod's IPv6 LB.
     records = [
         "acme.garvey.sh. A 64.186.8.205",
         "acme.garvey.sh. NS acme.garvey.sh.",
