@@ -11,7 +11,7 @@ data:
       - model_name: local-gpu
         litellm_params:
           model: openai/vllm
-          api_base: http://llm.home.arpa:8000/v1
+          api_base: http://llm.home.garvey.sh:8000/v1
           api_key: sk-unused
     litellm_settings:
       drop_params: true

@@ -26,7 +26,7 @@ data:
       storage:
         backend: s3
         s3:
-          endpoint: storj-gateway.home.arpa:7777
+          endpoint: storj-gateway.home.garvey.sh:7777
           region: us-east-1
           insecure: true
           access_key_id: ${GATEWAY_S3_ACCESS_KEY}

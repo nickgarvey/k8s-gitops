@@ -8,7 +8,7 @@ metadata:
 spec:
   staticConfigs:
     - targets:
-        - homeassistant.home.arpa:8123
+        - homeassistant.home.garvey.sh:8123
       labels:
         job: homeassistant
   scheme: HTTPS

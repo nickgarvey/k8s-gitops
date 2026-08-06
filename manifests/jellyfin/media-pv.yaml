@@ -26,7 +26,7 @@ spec:
     readOnly: false
     volumeHandle: smb-media-volume-jellyfin
     volumeAttributes:
-      source: "//smb.home.arpa/media"
+      source: "//smb.home.garvey.sh/media"
     nodeStageSecretRef:
       name: smb-secret
       namespace: jellyfin
