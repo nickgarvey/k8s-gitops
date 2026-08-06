@@ -27,7 +27,7 @@ spec:
             severity: critical
           annotations:
             summary: "Public DNS for {{ $labels.record }} no longer matches the router's WAN IP"
-            description: "{{ $labels.record }} resolves to {{ $labels.published_ip }} from the public internet, but the WAN interface holds {{ $labels.wan_ip }}. Let's Encrypt cannot reach our authoritative DNS, so every DNS-01 renewal will fail. Update the Cloudflare glue for home.garvey.sh and acme.garvey.sh, and ns1 in modules/networking/zone.nix. ('none' means the lookup returned no answer at all.)"
+            description: "{{ $labels.record }} no longer resolves to this router's WAN address from the public internet, so Let's Encrypt cannot reach our authoritative DNS and every DNS-01 renewal will fail. Query homelab_published_ip_info{record=\"{{ $labels.record }}\"} for the two addresses (published_ip=\"none\" means the lookup returned no answer at all). Fix by updating the Cloudflare glue for home.garvey.sh and acme.garvey.sh, and ns1 in modules/networking/zone.nix."
 
         # The drift check is push-based, so it going quiet is indistinguishable
         # from everything being fine unless we alert on the silence itself.
