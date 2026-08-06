@@ -19,7 +19,7 @@ data:
           "name": "s3",
           "rootdirectory": "/zot",
           "region": "garage",
-          "regionendpoint": "http://garage.home.arpa:3900",
+          "regionendpoint": "http://garage.home.garvey.sh:3900",
           "bucket": "zot",
           "secure": false,
           "forcepathstyle": true
