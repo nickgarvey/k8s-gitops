@@ -1,0 +1,92 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: certificate-alerts
+  namespace: prometheus
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+    prometheus: prometheus
+spec:
+  groups:
+    - name: certmanager.renewal
+      rules:
+        # Every DNS-01 renewal depends on Let's Encrypt reaching ns1.home.garvey.sh
+        # and acme.garvey.sh, both of which publish our DHCP-assigned WAN IP with no
+        # DDNS automation (see the wan.dns group). When that breaks, renewal fails
+        # silently and the only symptom is the clock running down -- these rules are
+        # the backstop that turns that into a page.
+        - alert: CertManagerCertNotReady
+          expr: certmanager_certificate_ready_status{condition="True"} == 0
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "cert-manager certificate {{ $labels.namespace }}/{{ $labels.name }} is not ready"
+            description: "Certificate {{ $labels.namespace }}/{{ $labels.name }} has been not-Ready for over an hour. Check `kubectl describe certificate,order,challenge -n {{ $labels.namespace }}`."
+
+        # cert-manager renews at 30 days remaining. Dropping under 21 means at least
+        # one renewal attempt has already failed, with ~3 weeks of runway left.
+        - alert: CertManagerCertExpiringSoon
+          expr: (certmanager_certificate_expiration_timestamp_seconds - time()) / 86400 < 21
+          labels:
+            severity: warning
+          annotations:
+            summary: "Certificate {{ $labels.namespace }}/{{ $labels.name }} expires in under 21 days"
+            description: "{{ $labels.namespace }}/{{ $labels.name }} has {{ $value | printf \"%.1f\" }} days left and should already have renewed at 30. Renewal is failing."
+
+        - alert: CertManagerCertExpiringCritical
+          expr: (certmanager_certificate_expiration_timestamp_seconds - time()) / 86400 < 7
+          labels:
+            severity: critical
+          annotations:
+            summary: "Certificate {{ $labels.namespace }}/{{ $labels.name }} expires in under 7 days"
+            description: "{{ $labels.namespace }}/{{ $labels.name }} has {{ $value | printf \"%.1f\" }} days left. Once it expires, clients that verify the chain -- including the ESP32 devices pinned to Home Assistant -- stop working."
+
+        # Without this, cert-manager being down looks identical to "no certificates
+        # have problems": the expiry series simply vanish and every rule above stops
+        # evaluating. Alert on the absence itself.
+        - alert: CertManagerMetricsMissing
+          expr: absent(certmanager_certificate_expiration_timestamp_seconds) or up{job="cert-manager"} == 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "cert-manager metrics are missing"
+            description: "Prometheus cannot scrape cert-manager, so certificate expiry is unmonitored. The other certificate alerts are blind until this recovers."
+
+    # Home Assistant issues its own cert on-box (the Let's Encrypt app, DNS-01 via
+    # RFC2136/TSIG against Knot), so cert-manager has no visibility into it. These
+    # rules watch what HA actually serves on the wire. Fed by
+    # nix-configs/modules/services/ha-cert-probe.nix on fus.
+    - name: homeassistant.tls
+      rules:
+        # The important one. Renewal writing a new file to /ssl is not enough --
+        # HA only loads its certificate at startup, so a renewal that is not
+        # followed by a restart leaves it serving the old one. Expiry alone would
+        # not catch that, and would not have caught the pre-migration state either
+        # (a private-CA cert for the wrong hostname, valid until 2030).
+        - alert: HAServedCertInvalid
+          expr: homelab_ha_served_cert_valid == 0
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Home Assistant is serving an invalid certificate"
+            description: "The certificate served on {{ $labels.host }}:8123 fails hostname or chain verification. The ESP32 devices verify this chain and will stop being able to reach HA. Most likely a renewal ran without restarting HA."
+
+        - alert: HAServedCertExpiringSoon
+          expr: (homelab_ha_served_cert_expiry_seconds - time()) / 86400 < 14
+          labels:
+            severity: critical
+          annotations:
+            summary: "The certificate Home Assistant serves expires in under 14 days"
+            description: "{{ $labels.host }} is serving a certificate with {{ $value | printf \"%.1f\" }} days left. Renewal or the post-renewal restart is not working."
+
+        - alert: HACertProbeMissing
+          expr: absent(homelab_ha_served_cert_valid)
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "The Home Assistant certificate probe has stopped reporting"
+            description: "No samples for an hour -- check the vector service on fus. HA's served certificate is unmonitored until this recovers."

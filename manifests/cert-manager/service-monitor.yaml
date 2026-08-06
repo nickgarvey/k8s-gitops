@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cert-manager
+  namespace: cert-manager
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+    app.kubernetes.io/name: cert-manager
+spec:
+  # cert-manager is vendored pristine (vendor/cert-manager/cert-manager.yaml) and
+  # applied with a strategic patch, so this lives in its own file rather than as an
+  # edit to the vendored manifest. The selector matches the controller Service the
+  # upstream bundle already creates -- component:controller is what distinguishes it
+  # from the webhook/cainjector Services, which expose no useful metrics.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cert-manager
+      app.kubernetes.io/component: controller
+  endpoints:
+    - port: tcp-prometheus-servicemonitor
+      interval: 60s
