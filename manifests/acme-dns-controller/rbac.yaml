@@ -1,0 +1,90 @@
+# RBAC for the garvey-sh-cert-controller.
+#
+# The ClusterRole rules are the controller-gen output from the
+# garvey-sh-cert-controller repo (config/rbac/role.yaml) verbatim. ClusterRole
+# (not namespaced Role) because the controller works across namespaces:
+#   - AcmeDnsCert objects live in each service's namespace (e.g. zot).
+#   - the account Secret it owns lives in cert-manager (acme-dns / acmedns.json).
+#   - the Cloudflare token Secret lives in this namespace.
+# Cluster-wide secrets get/list/watch/patch/update is broader than strictly
+# needed; tighten later if desired. Leader election is disabled (single
+# replica), so no coordination.k8s.io/leases rules are required.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: garvey-sh-cert-controller
+  namespace: acme-dns-controller
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: garvey-sh-cert-controller
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - homelab.garvey.sh
+  resources:
+  - acmednscerts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - homelab.garvey.sh
+  resources:
+  - acmednscerts/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - homelab.garvey.sh
+  resources:
+  - acmednscerts/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: garvey-sh-cert-controller
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: garvey-sh-cert-controller
+subjects:
+- kind: ServiceAccount
+  name: garvey-sh-cert-controller
+  namespace: acme-dns-controller
