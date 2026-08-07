@@ -81,13 +81,20 @@ who can later call `/update` for this account to in-cluster solver pods.
 ```bash
 kubectl -n acme-dns port-forward svc/acme-dns-api 8080:80 &
 PF=$!
-REG=$(curl -sX POST http://localhost:8080/register \
-        -H 'Content-Type: application/json' \
-        -d '{"allowfrom":["2001:470:482f:100::/56"]}')
+curl -sX POST http://localhost:8080/register \
+  -H 'Content-Type: application/json' \
+  -d '{"allowfrom":["2001:470:482f:100::/56"]}' -o /tmp/acmedns-reg.json
 kill $PF
-echo "$REG" | jq      # -> {username, password, fulldomain, subdomain, allowfrom}
+cat /tmp/acmedns-reg.json      # -> {username, password, fulldomain, subdomain, allowfrom}
 ```
-Keep `$REG`. Note its `.fulldomain` — that's the CNAME target.
+**Gotcha:** save the response straight to a file with `curl -o`, don't pipe it through
+`jq` (or capture it in a shell variable) as your only copy — if `jq` isn't installed
+(exit 127) or the pretty-print step fails for any reason, the response is gone and
+that account is orphaned: acme-dns has no lookup-by-name, so there is no way to
+retrieve its credentials again. Registering again for the same host is harmless
+(just wastes an account) but you must not reuse the lost one — register a fresh
+one and keep the raw file until step 3 is done. Note its `.fulldomain` — that's the
+CNAME target.
 
 ### 2. Create the delegation CNAME in Cloudflare
 `_acme-challenge.foo.garvey.sh` → `<fulldomain>.` (trailing dot; DNS-only / grey cloud).
@@ -146,12 +153,36 @@ kubectl get secret foo-tls -n foo -o jsonpath='{.data.tls\.crt}' | base64 -d | \
   openssl x509 -noout -issuer        # should NOT say "(STAGING)"
 ```
 
-### 5. Deploy the service (the zot pattern)
-Pick an unused LB IP from the pool (`grep -rh lb-ipam-ips manifests/*/service.yaml`), then
-write `manifests/foo/` mirroring zot:
+### 5. Deploy the service
+Pick an unused LB IP from the pool (`grep -rh lb-ipam-ips manifests/*/service.yaml`).
+
+**If the app can terminate TLS itself** (the zot pattern), write `manifests/foo/`
+mirroring zot:
 - `configmap` — app serves TLS on **443**, cert/key from a mounted secret
 - `deployment` — mount `foo-tls` at the TLS path, HTTPS probes on 443
 - `service` — `io.cilium/lb-ipam-ips: <picked IP>`, port `443 → 443`
+
+**If it can't** (e.g. jellyfin — no built-in cert/key config path), add a Caddy
+sidecar instead (see `manifests/jellyfin/` for the full reference):
+- app container stays on its native plaintext port, unchanged
+- `caddy-configmap.yaml` — Caddyfile with `{ auto_https off; admin off }` and a
+  `:443 { tls /certs/tls.crt /certs/tls.key; reverse_proxy http://127.0.0.1:<app-port> }`
+  block
+- `deployment` — add a `caddy:2-alpine` container (`caddy run --config
+  /etc/caddy/Caddyfile`) to the same pod, mounting the Caddyfile ConfigMap at
+  `/etc/caddy` and the `foo-tls` Secret directly at `/certs` (no self-signed
+  init container needed — unlike opencloud's tailnet-only self-signed variant,
+  we already have a real cert-manager Secret)
+- `service` — same as above: `io.cilium/lb-ipam-ips: <picked IP>`, port `443 → 443`
+  routed to the sidecar
+
+Either way, cert-manager handles renewal automatically, but **neither path
+hot-reloads the cert on renewal**: Caddy's static `tls cert key` directive only
+loads the files at config-load/startup, not on change, so the same
+`kubectl rollout restart` caveat zot has applies here too — verified by testing
+(a renewed jellyfin-tls Secret sat updated on disk for minutes while Caddy kept
+serving the old cert, until the pod was restarted). No Reloader is installed;
+budget for a manual restart (or add one) around each ~60-day renewal.
 
 Apply **after** `foo-tls` exists (else the pod hangs on the missing secret volume):
 ```bash

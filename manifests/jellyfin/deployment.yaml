@@ -55,6 +55,29 @@ spec:
             - name: encoding-seed
               mountPath: /seed-encoding
       containers:
+        - name: caddy
+          image: caddy:2-alpine
+          command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
+          ports:
+            - containerPort: 80
+              name: http-redirect
+            - containerPort: 443
+              name: https
+          volumeMounts:
+            - name: caddy-config
+              mountPath: /etc/caddy
+            - name: caddy-data
+              mountPath: /data
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
         - name: jellyfin
           image: jellyfin/jellyfin:latest
           ports:
@@ -104,3 +127,11 @@ spec:
         - name: encoding-seed
           configMap:
             name: jellyfin-encoding-config
+        - name: caddy-config
+          configMap:
+            name: jellyfin-caddy
+        - name: caddy-data
+          emptyDir: {}
+        - name: certs
+          secret:
+            secretName: jellyfin-tls

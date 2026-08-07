@@ -1,0 +1,14 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: jellyfin-tls
+  namespace: jellyfin
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  secretName: jellyfin-tls
+  dnsNames:
+    - jellyfin.garvey.sh
+  issuerRef:
+    name: letsencrypt-acmedns-prod
+    kind: ClusterIssuer

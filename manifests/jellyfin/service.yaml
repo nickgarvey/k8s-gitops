@@ -5,12 +5,29 @@ metadata:
   namespace: jellyfin
   labels:
     app.kubernetes.io/managed-by: ngarvey-homelab
+  annotations:
+    io.cilium/lb-ipam-ips: "2001:470:482f:2::5001"
 spec:
-  type: ClusterIP
+  type: LoadBalancer
+  ipFamilies: [IPv6]
+  ipFamilyPolicy: SingleStack
   selector:
     app: jellyfin
   ports:
     - name: http
       port: 80
+      targetPort: 80
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 443
+      protocol: TCP
+    # Dedicated path for the Tailscale ingress, which always speaks plain
+    # HTTP to the backend internally (it terminates TLS itself). Must bypass
+    # the :80 redirect above -- if Tailscale's proxy got a 301 back, the
+    # client's re-request would just hit Tailscale's TLS termination again,
+    # forwarding to :80 again, looping forever.
+    - name: tailscale-http
+      port: 8096
       targetPort: 8096
       protocol: TCP
