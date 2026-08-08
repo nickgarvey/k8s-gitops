@@ -24,9 +24,13 @@ spec:
         #                  binds the pod's IPv6 interface. Seed only if absent, so
         #                  UI network changes are preserved afterward.
         #   encoding.xml - Intel iGPU transcoding: seed the whole file if absent,
-        #                  otherwise force <HardwareAccelerationType> to vaapi on
-        #                  every boot. Other encoding fields stay UI-editable; the
-        #                  GPU toggle is owned by gitops and reverts on restart.
+        #                  otherwise force <HardwareAccelerationType>,
+        #                  <HardwareDecodingCodecs>, and <AllowHevcEncoding> on
+        #                  every boot, matched to what `vainfo` reports this node's
+        #                  iGPU actually supports (h264/hevc/mpeg2video/vp8/vp9
+        #                  decode + h264/hevc encode; no vc1, no av1). Other
+        #                  encoding fields stay UI-editable; these are owned by
+        #                  gitops and revert on restart.
         - name: seed-config
           image: jellyfin/jellyfin:latest
           command:
@@ -45,7 +49,9 @@ spec:
                 echo "seeded encoding.xml (vaapi)"
               else
                 sed -i 's#<HardwareAccelerationType>[^<]*</HardwareAccelerationType>#<HardwareAccelerationType>vaapi</HardwareAccelerationType>#' /config/config/encoding.xml
-                echo "enforced HardwareAccelerationType=vaapi in existing encoding.xml"
+                sed -i 's#<AllowHevcEncoding>[^<]*</AllowHevcEncoding>#<AllowHevcEncoding>true</AllowHevcEncoding>#' /config/config/encoding.xml
+                sed -i '/<HardwareDecodingCodecs>/,/<\/HardwareDecodingCodecs>/c\<HardwareDecodingCodecs><string>h264</string><string>hevc</string><string>mpeg2video</string><string>vp8</string><string>vp9</string></HardwareDecodingCodecs>' /config/config/encoding.xml
+                echo "enforced HardwareAccelerationType=vaapi, AllowHevcEncoding=true, and HardwareDecodingCodecs in existing encoding.xml"
               fi
           volumeMounts:
             - name: config

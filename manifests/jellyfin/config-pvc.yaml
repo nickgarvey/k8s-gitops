@@ -9,6 +9,9 @@ spec:
   accessModes:
     - ReadWriteOnce
   storageClassName: longhorn-wffc
+  # Do not remove volumeName - re-applying this without it would silently
+  # provision a fresh empty volume instead of binding to the real config data.
+  volumeName: jellyfin-config-restored
   resources:
     requests:
       storage: 10Gi

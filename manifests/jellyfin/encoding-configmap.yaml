@@ -57,12 +57,15 @@ data:
       <EnableIntelLowPowerH264HwEncoder>false</EnableIntelLowPowerH264HwEncoder>
       <EnableIntelLowPowerHevcHwEncoder>false</EnableIntelLowPowerHevcHwEncoder>
       <EnableHardwareEncoding>true</EnableHardwareEncoding>
-      <AllowHevcEncoding>false</AllowHevcEncoding>
+      <AllowHevcEncoding>true</AllowHevcEncoding>
       <AllowAv1Encoding>false</AllowAv1Encoding>
       <EnableSubtitleExtraction>true</EnableSubtitleExtraction>
       <HardwareDecodingCodecs>
         <string>h264</string>
-        <string>vc1</string>
+        <string>hevc</string>
+        <string>mpeg2video</string>
+        <string>vp8</string>
+        <string>vp9</string>
       </HardwareDecodingCodecs>
       <AllowOnDemandMetadataBasedKeyframeExtractionForExtensions>
         <string>mkv</string>
