@@ -47,14 +47,7 @@ spec:
               mountPath: /config/sa.json
               subPath: sa.json
               readOnly: true
-            - name: ca-vol
-              mountPath: /config/garvey-ca.pem
-              subPath: garvey-ca.pem
-              readOnly: true
       volumes:
         - name: secret-vol
           secret:
             secretName: trmnl-display-secret
-        - name: ca-vol
-          configMap:
-            name: trmnl-display-ca
