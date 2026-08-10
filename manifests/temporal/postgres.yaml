@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal-postgres
+  namespace: temporal
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  selector:
+    app: temporal-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: temporal-postgres
+  namespace: temporal
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  serviceName: temporal-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: temporal-postgres
+  template:
+    metadata:
+      labels:
+        app: temporal-postgres
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      containers:
+        - name: postgres
+          # Temporal 1.29's postgres12 driver targets PostgreSQL 12+.
+          # IPv6: the official image entrypoint sets listen_addresses='*' and a
+          # `host all all all` pg_hba rule, so v6-only pod networking works
+          # without extra config -- do not add listen/bind overrides here.
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: temporal-postgres
+          env:
+            # Subdirectory so Longhorn's lost+found doesn't trip initdb
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+              name: postgres
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "temporal", "-d", "temporal"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "temporal", "-d", "temporal"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/managed-by: ngarvey-homelab
+          recurring-job-group.longhorn.io/default: enabled
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            # Temporal's history/execution tables grow faster than authentik's.
+            storage: 20Gi
+        storageClassName: longhorn-wffc

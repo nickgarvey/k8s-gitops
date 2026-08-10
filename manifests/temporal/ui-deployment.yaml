@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-ui
+  namespace: temporal
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: temporal-ui
+  template:
+    metadata:
+      labels:
+        app: temporal-ui
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      containers:
+        # temporalio/ui has no TLS listener of its own, so Caddy terminates on
+        # 443 in-pod and proxies to the UI on loopback:8080.
+        - name: caddy
+          image: caddy:2-alpine
+          command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
+          ports:
+            - containerPort: 80
+              name: http-redirect
+            - containerPort: 443
+              name: https
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          volumeMounts:
+            - name: caddy-config
+              mountPath: /etc/caddy
+            - name: caddy-data
+              mountPath: /data
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: ui
+          # Pin exact version; the UI speaks a versioned gRPC API to the server.
+          image: temporalio/ui:v2.38.3
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: temporal-frontend.temporal.svc:7233
+            # ui-server's config template has no bind-address knob; it listens
+            # on ":8080", which Go opens as [::] -- IPv6-clean as-is.
+            - name: TEMPORAL_UI_PORT
+              value: "8080"
+            - name: TEMPORAL_CORS_ORIGINS
+              value: https://temporal.garvey.sh
+            # No outbound calls from the homelab.
+            - name: TEMPORAL_DISABLE_NEWS_FETCH
+              value: "true"
+            # TEMPORAL_CSRF_COOKIE_INSECURE is deliberately left at its false
+            # default: Caddy serves real HTTPS, so the Secure cookie is correct.
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: caddy-config
+          configMap:
+            name: temporal-caddy
+        - name: caddy-data
+          emptyDir: {}
+        - name: certs
+          secret:
+            secretName: temporal-tls

@@ -1,0 +1,28 @@
+# In-cluster only. Workers reach the frontend at
+# temporal-frontend.temporal.svc:7233. Nothing outside the cluster speaks gRPC
+# to Temporal yet -- if that changes, add a LoadBalancer pinned to
+# 2001:470:482f:2::7233 rather than exposing this Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal-frontend
+  namespace: temporal
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+    # Selected by service-monitor.yaml -- the other Services in this namespace
+    # carry the managed-by label too and have no metrics port.
+    app.kubernetes.io/name: temporal
+spec:
+  ipFamilies: [IPv6]
+  ipFamilyPolicy: SingleStack
+  selector:
+    app: temporal
+  ports:
+    - name: grpc
+      port: 7233
+      targetPort: 7233
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP

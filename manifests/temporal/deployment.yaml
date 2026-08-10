@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal
+  namespace: temporal
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: temporal
+  template:
+    metadata:
+      labels:
+        app: temporal
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      containers:
+        - name: temporal
+          # Pin exact version: Temporal schema migrations are ordered, never
+          # use :latest. auto-setup runs frontend/history/matching/worker in one
+          # process and creates + migrates the Postgres schema on start, which
+          # is why there is no separate schema Job here.
+          image: temporalio/auto-setup:1.29.7
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            # POSTGRES_USER + POSTGRES_PWD (note _PWD, not _PASSWORD -- that is
+            # what auto-setup.sh and the config template read).
+            - secretRef:
+                name: temporal-db
+          env:
+            # auto-setup.sh only accepts mysql8/postgres12/postgres12_pgx/
+            # cassandra. postgres12 is the right driver for PostgreSQL 16.
+            - name: DB
+              value: postgres12
+            # Default is 3306 (MySQL), so this must be set explicitly.
+            - name: DB_PORT
+              value: "5432"
+            - name: POSTGRES_SEEDS
+              value: temporal-postgres
+            - name: DBNAME
+              value: temporal
+            - name: VISIBILITY_DBNAME
+              value: temporal_visibility
+            # IPv6-only cluster. The config template defaults every service's
+            # bindOnIP to 127.0.0.1, which would make the pod unreachable.
+            # Deliberately NOT setting TEMPORAL_AUTH_AUTHORIZER or
+            # TEMPORAL_AUTH_CLAIM_MAPPER: with both unset the template omits the
+            # publicClient block, which would otherwise render hostPort as
+            # ":::7233" (it string-concatenates BIND_ON_IP + ":" + port) and
+            # fail to parse.
+            - name: BIND_ON_IP
+              value: "::"
+            # Ringpop membership address. Unset means the ring never forms.
+            - name: TEMPORAL_BROADCAST_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # The template only emits a metrics block `with env
+            # PROMETHEUS_ENDPOINT` -- no metrics at all without this.
+            - name: PROMETHEUS_ENDPOINT
+              value: "[::]:9090"
+            - name: DEFAULT_NAMESPACE
+              value: default
+            # Default is 24h.
+            - name: DEFAULT_NAMESPACE_RETENTION
+              value: 72h
+            # No Elasticsearch in this cluster; visibility lives in Postgres.
+            - name: ENABLE_ES
+              value: "false"
+          ports:
+            - containerPort: 7233
+              name: grpc
+            - containerPort: 9090
+              name: metrics
+          # Membership ports 6933-6939 are same-pod only (all four services run
+          # in this one process), so they need no declarations.
+          readinessProbe:
+            grpc:
+              port: 7233
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            # First boot runs setup-schema + update-schema and is slow.
+            failureThreshold: 12
+          livenessProbe:
+            grpc:
+              port: 7233
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 12
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi

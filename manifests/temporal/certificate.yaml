@@ -1,0 +1,15 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: temporal-tls
+  namespace: temporal
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  secretName: temporal-tls
+  dnsNames:
+    - temporal.garvey.sh
+  issuerRef:
+    # Staging validated cleanly on 2026-08-10; promoted to prod.
+    name: letsencrypt-acmedns-prod
+    kind: ClusterIssuer
