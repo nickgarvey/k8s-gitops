@@ -20,7 +20,7 @@ the vendored version.
 
 ## Issuers & secrets (this dir)
 
-- `cluster-issuer.yaml` — legacy Cloudflare DNS-01 issuer `letsencrypt-prod` (dormant).
-- `cluster-issuer-acmedns-staging.yaml` / `-prod.yaml` — acme-dns DNS-01 issuers.
-- `secret.yaml` — Cloudflare API token (SopsSecret). The acme-dns account secret lives at
-  `manifests/acme-dns/secret.yaml` (also namespaced to `cert-manager`).
+- `cluster-issuer-acmedns-staging.yaml` / `-prod.yaml` — acme-dns DNS-01 issuers. These are
+  the only issuers; every Certificate uses `letsencrypt-acmedns-prod`.
+- The acme-dns account secret lives at `manifests/acme-dns/secret.yaml` (also namespaced to
+  `cert-manager`). Onboarding a new name: `manifests/acme-dns/ONBOARDING.md`.
