@@ -1,7 +1,9 @@
-# In-cluster only. Workers reach the frontend at
-# temporal-frontend.temporal.svc:7233. Nothing outside the cluster speaks gRPC
-# to Temporal yet -- if that changes, add a LoadBalancer pinned to
-# 2001:470:482f:2::7233 rather than exposing this Service.
+# In-cluster only, and the only Service service-monitor.yaml scrapes. In-cluster
+# workers reach the frontend at temporal-frontend.temporal.svc:7233.
+#
+# Off-cluster gRPC clients -- the nix-build worker on talos -- go through the
+# LoadBalancer in frontend-lb-service.yaml instead, which is why this one stays
+# ClusterIP.
 apiVersion: v1
 kind: Service
 metadata:

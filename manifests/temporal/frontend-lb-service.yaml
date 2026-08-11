@@ -1,0 +1,37 @@
+# The frontend's gRPC endpoint, reachable from outside the cluster.
+#
+# The nightly nix-build worker runs on talos rather than in the cluster: the
+# whole point of that job is to prime talos's /nix/store, which serves the fleet
+# as a binary cache. It cannot use the ClusterIP Service -- the service CIDR
+# (fd43::/112) is not routed off-cluster and Cilium does not answer ClusterIP
+# externally -- so it dials this LoadBalancer instead, by the name k8s_gateway
+# derives from it: temporal.temporal.k8s.home.garvey.sh:7233.
+#
+# Named `temporal` rather than `temporal-frontend-lb` because that name is what
+# ends up in the worker's -address flag.
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal
+  namespace: temporal
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+    # Deliberately NOT app.kubernetes.io/name: temporal -- service-monitor.yaml
+    # selects on that label, and this Service exposes no metrics port.
+  annotations:
+    # Follows the "last hextet = the service's port" rule, and matches the
+    # address service.yaml reserved for exactly this.
+    io.cilium/lb-ipam-ips: "2001:470:482f:2::7233"
+spec:
+  type: LoadBalancer
+  ipFamilies: [IPv6]
+  ipFamilyPolicy: SingleStack
+  selector:
+    app: temporal
+  ports:
+    # gRPC only. Metrics stay on the ClusterIP Service, where the ServiceMonitor
+    # scrapes them.
+    - name: grpc
+      port: 7233
+      targetPort: 7233
+      protocol: TCP

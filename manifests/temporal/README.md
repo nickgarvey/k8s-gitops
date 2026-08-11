@@ -38,6 +38,7 @@ kubectl apply -f manifests/temporal/postgres.yaml
 kubectl -n temporal rollout status statefulset/temporal-postgres
 kubectl apply -f manifests/temporal/deployment.yaml
 kubectl apply -f manifests/temporal/service.yaml
+kubectl apply -f manifests/temporal/frontend-lb-service.yaml
 kubectl apply -f manifests/temporal/caddy-configmap.yaml
 kubectl apply -f manifests/temporal/ui-deployment.yaml
 kubectl apply -f manifests/temporal/ui-service.yaml
@@ -88,8 +89,24 @@ so the ~489 series land in Prometheus under bare names — `service_requests`,
 `{namespace="temporal"}` when querying. If the collisions ever become a problem,
 add a `metricRelabelings` prefix rule to `service-monitor.yaml`.
 
-## Adding a worker later
+## Workers
 
-Workers are ordinary application Deployments in this namespace. Point them at
-`temporal-frontend.temporal.svc:7233` and give each its own task queue. Nothing
-in these manifests needs to change.
+In-cluster workers are ordinary application Deployments in this namespace. Point
+them at `temporal-frontend.temporal.svc:7233` and give each its own task queue.
+Nothing in these manifests needs to change for those.
+
+Off-cluster workers use `frontend-lb-service.yaml`, a LoadBalancer on
+`2001:470:482f:2::7233` that k8s_gateway publishes as
+`temporal.temporal.k8s.home.garvey.sh`. A ClusterIP is not an option for them:
+the service CIDR is `fd43::/112`, which is not routed off-cluster, and Cilium
+does not serve ClusterIP to external clients by default.
+
+The first such worker is `nix-build-worker` from
+[temporal-workflows](https://github.com/nickgarvey/temporal-workflows), running
+as a systemd service on talos (`services.temporalNixBuilder` in nix-configs) on
+task queue `nix-build`. It runs there rather than here because its job is to
+prime talos's `/nix/store`, which serves the fleet as a binary cache.
+
+That endpoint carries no TLS and no auth, exactly like the in-cluster one --
+anything on the LAN that can route to the LB IP can drive Temporal. That is the
+same posture as the UI; revisit both together.
