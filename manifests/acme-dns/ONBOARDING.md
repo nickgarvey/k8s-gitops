@@ -232,3 +232,31 @@ spec:
 | 5–6. deploy service + split-horizon DNS | Still manual (per-service manifests + router) — out of the controller's scope. |
 
 Renewal is cert-manager's job in both the manual and controller paths — nothing to do.
+
+### Status: not deployed
+
+A `manifests/acme-dns-controller/` directory existed from 2026-08-05 to 2026-08-10 but was
+**never applied** — no CRD, namespace, RBAC, or Deployment ever reached the cluster. It was
+removed rather than left to rot; recover it from git history (`git log -- manifests/acme-dns-controller/`)
+if the controller is picked up again. The controller source is `~/projects/acme-cloudflare-controller`,
+and its image is still in zot as `oci.garvey.sh/garvey-sh-cert-controller:0.1.0`.
+
+**The manual runbook above is the only working path today.**
+
+### Two blockers to resolve before deploying it
+
+Both touch live state, and neither is obvious from the controller code:
+
+1. **Account-Secret ownership.** `cert-manager/acme-dns` (key `acmedns.json`) is created by the
+   SopsSecret operator from `secret.yaml` in this directory. The controller needs to *write* that
+   Secret to add new accounts, and the operator will revert those writes. Handing over means
+   backing the Secret up, then `kubectl -n cert-manager delete sopssecret acme-dns-sopssecret
+   --cascade=orphan` to strip the ownerRef while keeping the Secret — and thereafter keeping
+   `secret.yaml` out of the apply path, since re-applying it re-takes ownership. Note the
+   consequence: the account creds would then live only in-cluster (plus the acme-dns PVC) and no
+   longer in GitOps, so they need their own backup story.
+2. **NetworkPolicy fence.** acme-dns `/register` is open today (acknowledged debt). The controller
+   design assumes a CiliumNetworkPolicy restricting ingress to `acme-dns-api:80` to just the
+   controller pod (`/register`) and cert-manager (`/update`). This would be the cluster's first
+   NetworkPolicy — cert-manager's DNS-01 self-check and `/update` path both need verifying after
+   it lands.

@@ -13,10 +13,9 @@ anything up.
 
 ## Certificate (do this first — it is IP-independent)
 
-Follow `../acme-dns/ONBOARDING.md` by hand for `temporal.garvey.sh`. Use the
-manual runbook, not the `AcmeDnsCert` CR: that controller's account-Secret
-ownership migration is still pending (`../acme-dns-controller/README.md`), so
-driving it now would fight the SopsSecret operator.
+Follow `../acme-dns/ONBOARDING.md` by hand for `temporal.garvey.sh`. The manual
+runbook is the only path — the `AcmeDnsCert` controller was never deployed and
+its manifests were removed (see "Status: not deployed" in that doc).
 
 1. `POST /register` against a port-forwarded `acme-dns-api` with
    `{"allowfrom":["2001:470:482f:100::/56"]}`. Save the response with
