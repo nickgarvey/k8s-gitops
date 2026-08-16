@@ -50,7 +50,34 @@ spec:
               else
                 sed -i 's#<HardwareAccelerationType>[^<]*</HardwareAccelerationType>#<HardwareAccelerationType>vaapi</HardwareAccelerationType>#' /config/config/encoding.xml
                 sed -i 's#<AllowHevcEncoding>[^<]*</AllowHevcEncoding>#<AllowHevcEncoding>true</AllowHevcEncoding>#' /config/config/encoding.xml
-                sed -i '/<HardwareDecodingCodecs>/,/<\/HardwareDecodingCodecs>/c\<HardwareDecodingCodecs><string>h264</string><string>hevc</string><string>mpeg2video</string><string>vp8</string><string>vp9</string></HardwareDecodingCodecs>' /config/config/encoding.xml
+                # Rewrite <HardwareDecodingCodecs> with awk, not a sed range. A sed
+                # `/open/,/close/c\` range whose replacement puts both tags on one
+                # line is not idempotent: on the next boot sed matches the opening
+                # tag, then looks for the closing tag starting at the NEXT line,
+                # never finds it, and deletes through EOF -- taking
+                # </EncodingOptions> with it. Jellyfin then fails to parse the file
+                # and silently reverts to software transcoding. This awk handles the
+                # multi-line, one-line, and self-closing forms and is idempotent.
+                awk '
+                  /<HardwareDecodingCodecs/ && !done {
+                    match($0, /^[ \t]*/); ind = substr($0, 1, RLENGTH)
+                    print ind "<HardwareDecodingCodecs>"
+                    n = split("h264 hevc mpeg2video vp8 vp9", c, " ")
+                    for (i = 1; i <= n; i++) print ind "  <string>" c[i] "</string>"
+                    print ind "</HardwareDecodingCodecs>"
+                    done = 1
+                    if ($0 !~ /\/>/ && $0 !~ /<\/HardwareDecodingCodecs>/) skip = 1
+                    next
+                  }
+                  skip { if (/<\/HardwareDecodingCodecs>/) skip = 0; next }
+                  { print }
+                ' /config/config/encoding.xml > /tmp/encoding.xml && mv /tmp/encoding.xml /config/config/encoding.xml
+                # Backstop: if anything above left the file unparseable, Jellyfin
+                # would silently fall back to CPU-only transcoding. Re-seed instead.
+                if ! grep -q '</EncodingOptions>' /config/config/encoding.xml; then
+                  echo "encoding.xml is malformed after enforcement; re-seeding from ConfigMap"
+                  cp /seed-encoding/encoding.xml /config/config/encoding.xml
+                fi
                 echo "enforced HardwareAccelerationType=vaapi, AllowHevcEncoding=true, and HardwareDecodingCodecs in existing encoding.xml"
               fi
           volumeMounts:
