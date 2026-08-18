@@ -1,0 +1,14 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: anki-tls
+  namespace: anki
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  secretName: anki-tls
+  dnsNames:
+    - anki.home.garvey.sh
+  issuerRef:
+    name: letsencrypt-acmedns-prod
+    kind: ClusterIssuer

@@ -19,6 +19,37 @@ spec:
         app.kubernetes.io/managed-by: ngarvey-homelab
     spec:
       containers:
+        # TLS terminator for anki.home.garvey.sh. anki-sync-server has no
+        # cert/key config path of its own, so this follows the jellyfin
+        # sidecar pattern from manifests/acme-dns/ONBOARDING.md.
+        #
+        # Caddy's static `tls` directive loads the cert at startup only and
+        # does NOT hot-reload on renewal, and no Reloader is installed -- so a
+        # `kubectl rollout restart deploy/anki-sync-server -n anki` is needed
+        # after each ~60-day cert-manager renewal, same as zot and jellyfin.
+        - name: caddy
+          image: caddy:2-alpine
+          command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
+          ports:
+            - containerPort: 80
+              name: http-redirect
+            - containerPort: 443
+              name: https
+          volumeMounts:
+            - name: caddy-config
+              mountPath: /etc/caddy
+            - name: caddy-data
+              mountPath: /data
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
         - name: anki-sync-server
           image: jeankhawand/anki-sync-server:25.07
           imagePullPolicy: IfNotPresent
@@ -38,3 +69,11 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: anki-data
+        - name: caddy-config
+          configMap:
+            name: anki-caddy
+        - name: caddy-data
+          emptyDir: {}
+        - name: certs
+          secret:
+            secretName: anki-tls
