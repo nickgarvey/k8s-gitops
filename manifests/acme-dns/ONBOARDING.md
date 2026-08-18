@@ -37,7 +37,7 @@ If the controller is ever down or being rebuilt, this is how you do it manually.
 | `allowfrom` (who may call `/update`) | `2001:470:482f:100::/56` (k3s cluster pod-CIDR — covers the cert-manager solver pod) |
 | ClusterIssuers | `letsencrypt-acmedns-staging`, `letsencrypt-acmedns-prod` |
 | LB IP pool | `2001:470:482f:2::/…` (statically pinned via `io.cilium/lb-ipam-ips`) |
-| Public zone / API | `garvey.sh` (Cloudflare) |
+| Zones a cert can be issued in | `garvey.sh` (Cloudflare) or `home.garvey.sh` (our Knot zone) — see "Picking a hostname" |
 
 ### `acmedns.json` structure
 ```json
@@ -67,13 +67,34 @@ account — so do not share an account across hostnames.
   # want: disable_registration = false
   # if it says true: kubectl apply -f manifests/acme-dns/configmap.yaml && kubectl -n acme-dns rollout restart deploy/acme-dns
   ```
-- A Cloudflare API token scoped `Zone:DNS:Edit` on `garvey.sh` (for the CNAME step).
+- A Cloudflare API token scoped `Zone:DNS:Edit` on `garvey.sh` — only for a
+  `*.garvey.sh` hostname. A `*.home.garvey.sh` one needs no Cloudflare access at all
+  (step 2b).
 - Your sops age key available locally (to re-seal `acmedns.json`).
 - A clean git working tree (so the only resulting diff is `secret.yaml`).
 
 ---
 
-## Onboarding a new host (`foo.garvey.sh`)
+## Picking a hostname
+
+A publicly-trusted cert can be issued for a name in **either** zone. The DNS-01 proof
+runs through acme-dns either way; what differs is where the delegation CNAME lives and
+whether you need a split-horizon override:
+
+| | `foo.garvey.sh` (Cloudflare) | `foo.home.garvey.sh` (our Knot zone) |
+|---|---|---|
+| Delegation CNAME (step 2) | Cloudflare dashboard/API | `cnames` in `nix-configs`' `dns.nix` + router deploy |
+| Credentials needed | Cloudflare `Zone:DNS:Edit` token | none |
+| Where the record is reviewable | Cloudflare only | in git |
+| Split-horizon override (step 6) | **required** — the public record points at the public IP, so `garveyShOverrides` is what makes internal TLS name-match | **not needed** — we serve the zone, so the AAAA already *is* the LB IP for everyone |
+| Examples | `oci`, `jellyfin`, `temporal` | `anki` |
+
+`home.garvey.sh` is the cheaper path and keeps the whole delegation in version
+control, so prefer it unless the name genuinely needs to sit on the apex domain.
+Either way the address is only *resolvable* from outside, not *reachable* — inbound
+`he-ipv6 → LAN` is default-deny at the router.
+
+## Onboarding a new host
 
 ### 1. Register the acme-dns account
 The API is ClusterIP-only, so port-forward, then `POST /register`. `allowfrom` restricts
@@ -96,10 +117,30 @@ retrieve its credentials again. Registering again for the same host is harmless
 one and keep the raw file until step 3 is done. Note its `.fulldomain` — that's the
 CNAME target.
 
-### 2. Create the delegation CNAME in Cloudflare
-`_acme-challenge.foo.garvey.sh` → `<fulldomain>.` (trailing dot; DNS-only / grey cloud).
+### 2. Create the delegation CNAME
 
-Dashboard: add a CNAME record. Or via API:
+`_acme-challenge.<host>` → `<fulldomain>.` (trailing dot). **Where this record goes
+depends on which zone the hostname is in** — see "Picking a hostname" above.
+
+> ⚠️ **Verify with `dig ... CNAME`, never `dig ... TXT`.** It is tempting to check the
+> challenge name for its TXT before cert-manager has written one. Don't. acme-dns
+> serves `acme.garvey.sh` with an SOA TTL of 3600, so that `NXDOMAIN` is negatively
+> cached for an hour by kresd *and* blocky — and every later DNS-01 self-check then
+> fails with `DNS record for "<host>" not yet propagated` even though the TXT is
+> sitting at acme-dns exactly as it should be. Issuance just stalls until the entry
+> expires. If you have already done it, flush **both** layers on the router (blocky
+> forwards to kresd, so clearing one is not enough):
+>
+> ```bash
+> ssh 10.28.0.1 'curl -sX POST http://127.0.0.1:4000/api/cache/flush'
+> ssh 10.28.0.1 'sudo kresctl cache clear --exact-name <fulldomain>.acme.garvey.sh.'
+> ```
+>
+> cert-manager retries every ~10s, so the cert lands about a minute later.
+
+#### 2a. `foo.garvey.sh` → Cloudflare
+
+DNS-only / grey cloud. Dashboard: add a CNAME record. Or via API:
 ```bash
 ZONE_ID=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=garvey.sh" \
   -H "Authorization: Bearer $CF_TOKEN" | jq -r '.result[0].id')
@@ -112,7 +153,41 @@ curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records
 dig +short _acme-challenge.foo.garvey.sh CNAME      # -> <fulldomain>.acme.garvey.sh.
 ```
 
+#### 2b. `foo.home.garvey.sh` → `dns.nix` (no Cloudflare, no dashboard)
+
+This zone is ours, so the delegation is declared in git instead of clicked into
+someone else's control panel. Add it to `cnames` in
+`~/nix-configs/modules/networking/dns.nix`; `zone.nix` renders it into the Knot
+zone automatically:
+
+```nix
+cnames = {
+  "_acme-challenge.foo" = "<fulldomain>.acme.garvey.sh.";   # trailing dot
+};
+```
+
+Deploy the router, then verify from both sides — the internal path is kresd, the
+external one is what Let's Encrypt actually walks (`ns1` → router DNAT → dnsdist →
+Knot):
+
+```bash
+cd ~/nix-configs && nix run .#deploy -- --hosts dragonsreach --mode safe
+dig +short _acme-challenge.foo.home.garvey.sh CNAME @10.28.0.1   # internal
+dig +short _acme-challenge.foo.home.garvey.sh CNAME @1.1.1.1     # external
+```
+
+Nothing else about the DNS-01 flow changes: cert-manager still writes the TXT at the
+acme-dns account, and kresd's existing `acme.garvey.sh` stub
+(`modules/router/knot-resolver.nix`) already carries the self-check across the CNAME
+out of the Knot zone — chasing exactly this kind of cross-zone alias is why kresd sits
+behind blocky in the first place.
+
 ### 3. Merge the account into the sealed secret
+
+The key is the **full hostname**, in whichever zone — `foo.garvey.sh` or
+`foo.home.garvey.sh`. It has to match the `dnsNames` entry in step 4 exactly, since
+that is how the solver looks the account up.
+
 Easiest (interactive) — opens the file decrypted in `$EDITOR`; add the new key to the
 `acmedns.json` object, save, sops re-seals to both age recipients automatically:
 ```bash
@@ -166,8 +241,15 @@ mirroring zot:
 sidecar instead (see `manifests/jellyfin/` for the full reference):
 - app container stays on its native plaintext port, unchanged
 - `caddy-configmap.yaml` — Caddyfile with `{ auto_https off; admin off }` and a
-  `:443 { tls /certs/tls.crt /certs/tls.key; reverse_proxy http://127.0.0.1:<app-port> }`
-  block
+  `:443 { tls /certs/tls.crt /certs/tls.key; reverse_proxy http://[::1]:<app-port> }`
+  block. **Check the loopback address rather than copying jellyfin's `127.0.0.1`.**
+  The cluster is IPv6-only, and whether the app opens an IPv4 socket at all is
+  app-specific: jellyfin binds dual-stack, but anki-sync-server runs with
+  `SYNC_HOST="::"` and has no v4 listener, so `127.0.0.1` would be refused and every
+  request would 502. Five-second check against the running pod:
+  ```bash
+  kubectl -n <ns> exec deploy/<app> -- cat /proc/net/tcp    # empty => you must use [::1]
+  ```
 - `deployment` — add a `caddy:2-alpine` container (`caddy run --config
   /etc/caddy/Caddyfile`) to the same pod, mounting the Caddyfile ConfigMap at
   `/etc/caddy` and the `foo-tls` Secret directly at `/certs` (no self-signed
@@ -190,8 +272,23 @@ kubectl apply -f manifests/foo/{namespace,configmap,service,deployment}.yaml
 kubectl rollout status deploy/foo -n foo
 ```
 
-### 6. Split-horizon DNS (nix-configs)
-So LAN clients reach it internally and TLS name-matches:
+### 6. Point the name at the service (nix-configs)
+
+Both zones need an edit to `modules/networking/dns.nix`, but a different one.
+
+**`foo.home.garvey.sh`** — add the address record itself. This is the only place the
+name is defined, and the same record serves internal and external resolvers, so there
+is no split-horizon entry to make:
+
+```nix
+records = {
+  foo = { v4 = []; v6 = [ "<picked LB IP>" ]; };
+};
+```
+
+**`foo.garvey.sh`** — the public record lives in Cloudflare and points at the public
+IP, so add a split-horizon override instead, or internal clients hairpin and TLS
+fails to name-match:
 ```nix
 # modules/networking/dns.nix
 garveyShOverrides = {
@@ -203,9 +300,19 @@ Deploy the router: `cd ~/nix-configs && nix run .#deploy -- --hosts <router> --m
 
 ### Verify
 ```bash
-dig +short foo.garvey.sh AAAA @<router>          # -> picked LB IP
-curl -sI https://foo.garvey.sh/…                  # 200, valid public cert, no --insecure
+dig +short <host> AAAA @10.28.0.1                 # -> picked LB IP
+
+# ssl_verify_result=0 is the real assertion: the public cert validated with no
+# --insecure. The HTTP status may legitimately be 404 if the app has no root route.
+curl -sS -o /dev/null -w 'http=%{http_code} verify=%{ssl_verify_result}\n' https://<host>/
+
+# If you added the :80 redirect block, confirm it rather than assuming it.
+curl -sS -o /dev/null -w '%{http_code} -> %{redirect_url}\n' http://<host>/
 ```
+
+With a Caddy sidecar, hit a path the app actually serves before calling it done — a
+**502 means the `reverse_proxy` loopback address is wrong** (see the `[::1]` note in
+step 5), whereas any status the app itself produces proves the hop works.
 
 ---
 
