@@ -253,8 +253,7 @@ sidecar instead (see `manifests/jellyfin/` for the full reference):
 - `deployment` — add a `caddy:2-alpine` container (`caddy run --config
   /etc/caddy/Caddyfile`) to the same pod, mounting the Caddyfile ConfigMap at
   `/etc/caddy` and the `foo-tls` Secret directly at `/certs` (no self-signed
-  init container needed — unlike opencloud's tailnet-only self-signed variant,
-  we already have a real cert-manager Secret)
+  init container needed — we already have a real cert-manager Secret)
 - `service` — same as above: `io.cilium/lb-ipam-ips: <picked IP>`, port `443 → 443`
   routed to the sidecar
 
