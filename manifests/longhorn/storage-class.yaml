@@ -16,3 +16,34 @@ parameters:
   fsType: "ext4"
   # Automatically applies the "all-volumes" recurring job group to all PVCs using this StorageClass
   recurringJobSelector: '[{"name":"all-volumes","isGroup":true}]'
+---
+# Single-replica class for workloads that already replicate themselves, so
+# Longhorn does not multiply the copy count on top. Used by the TiKV stores in
+# manifests/juicefs/, which keep three Raft copies across the three nodes.
+#
+# Not a default class, and deliberately without a recurringJobSelector: a
+# snapshot of one live member of a replicated system is not a usable backup of
+# that system. Anything using this class must have its own backup story.
+#
+# dataLocality is load-bearing, not tuning. numberOfReplicas: "1" alone lets
+# Longhorn put the replica on any node, which is not merely slower -- it breaks
+# the fault isolation the consumer thinks it has. Pods spread across nodes by
+# anti-affinity can all end up backed by volumes on ONE node, so losing that
+# node destroys every copy at once while the deployment still looks correct.
+# strict-local pins each replica to its own pod's node; if that is impossible
+# the volume fails loudly rather than silently going remote.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: longhorn-r1
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+provisioner: driver.longhorn.io
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  numberOfReplicas: "1"
+  dataLocality: "strict-local"
+  staleReplicaTimeout: "30"
+  fsType: "ext4"

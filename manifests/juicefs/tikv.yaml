@@ -1,0 +1,125 @@
+# Headless: TiKV stores are never reached through a ClusterIP. Clients ask PD
+# where the stores are and dial each one directly at the address it advertises.
+apiVersion: v1
+kind: Service
+metadata:
+  name: juicefs-tikv
+  namespace: juicefs
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  clusterIP: None
+  # Stores must be resolvable before they pass a readiness probe; they
+  # register with PD during startup.
+  publishNotReadyAddresses: true
+  selector:
+    app: juicefs-tikv
+  ports:
+    - name: peer
+      protocol: TCP
+      port: 20160
+    - name: status
+      protocol: TCP
+      port: 20180
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: juicefs-tikv
+  namespace: juicefs
+  labels:
+    app.kubernetes.io/managed-by: ngarvey-homelab
+spec:
+  serviceName: juicefs-tikv
+  replicas: 3
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: juicefs-tikv
+  template:
+    metadata:
+      labels:
+        app: juicefs-tikv
+        app.kubernetes.io/managed-by: ngarvey-homelab
+    spec:
+      # One store per node, matching TiKV's default 3 Raft replicas: a node loss
+      # then costs exactly one copy of each region. Required, not preferred --
+      # two stores on one node would silently halve the failure tolerance the
+      # replica count implies.
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: juicefs-tikv
+              topologyKey: kubernetes.io/hostname
+      containers:
+        # This holds every JuiceFS inode, directory entry and chunk map. The
+        # blocks in garage are content-addressed and carry no filesystem
+        # structure of their own, so losing all three stores makes the data
+        # unreachable even though the bytes survive. The mount's --backup-meta
+        # dump into the bucket is the recovery path -- see README.md.
+        - name: tikv
+          image: pingcap/tikv:v8.5.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /tikv-server
+            # The headless peer name, not the LoadBalancer address: pod-to-LB
+            # traffic is refused with EPERM in this cluster, so in-cluster
+            # clients must not go through the Service LB.
+            - --pd-endpoints=juicefs-pd-0.juicefs-pd-peer.juicefs.svc.cluster.local:2379
+            - --addr=[::]:20160
+            # The pod IP, supplied at runtime: PD records whatever a store
+            # advertises and hands it to clients. Pod IPs are ephemeral, but a
+            # restarted store re-registers under its existing store ID with the
+            # new address, and clients re-resolve through PD. LAN clients can
+            # reach these because the router and every LAN host route to the
+            # per-node pod CIDRs -- see nix-configs' modules/router/lan-ipv6.nix.
+            - --advertise-addr=[$(POD_IP)]:20160
+            - --status-addr=[::]:20180
+            - --advertise-status-addr=[$(POD_IP)]:20180
+            - --data-dir=/var/lib/tikv/data
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          ports:
+            - containerPort: 20160
+              name: peer
+            - containerPort: 20180
+              name: status
+          readinessProbe:
+            tcpSocket:
+              port: 20160
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/tikv
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/managed-by: ngarvey-homelab
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        # longhorn-r1, not the default class: TiKV already keeps three Raft
+        # copies across the three nodes, so the default numberOfReplicas: "2"
+        # would store six. Deliberately outside the recurring-job backup group
+        # too -- a volume snapshot of one live Raft peer is not a consistent
+        # backup of the filesystem, and restoring one would rejoin a store with
+        # stale state. Metadata backups come from --backup-meta instead.
+        storageClassName: longhorn-r1
+        resources:
+          requests:
+            # Row count scales with file count, not with bytes stored.
+            storage: 50Gi
