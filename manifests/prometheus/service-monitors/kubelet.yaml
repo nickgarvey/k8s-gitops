@@ -24,6 +24,15 @@ spec:
       relabelings:
         - action: labelmap
           regex: __meta_kubernetes_node_label_(.+)
+      metricRelabelings:
+        # k3s serves the combined control-plane registry on :10250, so this
+        # scrape duplicates the kube-apiserver ServiceMonitor 1:1 (etcd_* is
+        # 18179 series under each job). Keep only what genuinely originates
+        # from the kubelet/cAdvisor.
+        - action: drop
+          sourceLabels:
+            - __name__
+          regex: (apiserver|etcd|workqueue|scheduler|leader_election|authentication|authorization|rest_client|watch_cache|field_validation|serviceaccount|node_authorizer|disabled_metric|registered_metric|hidden_metric|kubernetes_feature)_.*
     # cAdvisor metrics
     - port: https-metrics
       scheme: https
@@ -35,6 +44,15 @@ spec:
       relabelings:
         - action: labelmap
           regex: __meta_kubernetes_node_label_(.+)
+      metricRelabelings:
+        # k3s serves the combined control-plane registry on :10250, so this
+        # scrape duplicates the kube-apiserver ServiceMonitor 1:1 (etcd_* is
+        # 18179 series under each job). Keep only what genuinely originates
+        # from the kubelet/cAdvisor.
+        - action: drop
+          sourceLabels:
+            - __name__
+          regex: (apiserver|etcd|workqueue|scheduler|leader_election|authentication|authorization|rest_client|watch_cache|field_validation|serviceaccount|node_authorizer|disabled_metric|registered_metric|hidden_metric|kubernetes_feature)_.*
     # Probes metrics
     - port: https-metrics
       scheme: https
@@ -46,4 +64,13 @@ spec:
       relabelings:
         - action: labelmap
           regex: __meta_kubernetes_node_label_(.+)
+      metricRelabelings:
+        # k3s serves the combined control-plane registry on :10250, so this
+        # scrape duplicates the kube-apiserver ServiceMonitor 1:1 (etcd_* is
+        # 18179 series under each job). Keep only what genuinely originates
+        # from the kubelet/cAdvisor.
+        - action: drop
+          sourceLabels:
+            - __name__
+          regex: (apiserver|etcd|workqueue|scheduler|leader_election|authentication|authorization|rest_client|watch_cache|field_validation|serviceaccount|node_authorizer|disabled_metric|registered_metric|hidden_metric|kubernetes_feature)_.*
 

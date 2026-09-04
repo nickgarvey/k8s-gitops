@@ -22,9 +22,28 @@ spec:
   # so local Prometheus only needs a short window.
   retention: 7d
 
-  # Replicate all samples to Mimir for long-term storage on Storj.
+  # Replicate samples to Mimir for long-term storage on Storj.
   remoteWrite:
     - url: http://mimir.mimir.svc:8080/api/v1/push
+      # Mimir keeps blocks forever, so only ship what is worth keeping forever.
+      # Local Prometheus still holds every series at full resolution for the 7d
+      # above, and Grafana has both datasources -- so anything dropped here is
+      # still queryable for a week. All alerting evaluates in Prometheus, not
+      # the Mimir ruler, so nothing here can break an alert.
+      writeRelabelConfigs:
+        # Histogram buckets are 70% of all series (160k of 232k) and no
+        # dashboard or alert uses histogram_quantile. Long-term latency
+        # quantiles are not worth 20GB of object storage.
+        - action: drop
+          sourceLabels:
+            - __name__
+          regex: .*_(bucket|sum|count)
+        # Control-plane internals: useful live, worthless as a multi-year
+        # archive. apiserver_* alone is half of all series.
+        - action: drop
+          sourceLabels:
+            - __name__
+          regex: (apiserver|etcd|workqueue|scheduler|rest_client|leader_election|authentication|authorization|storage_operation|csi|prober|kubernetes_feature)_.*
 
   # Storage configuration
   storage:
