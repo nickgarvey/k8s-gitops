@@ -19,7 +19,7 @@ data:
     activity_tracker:
       filepath: /data/metrics-activity.log
 
-    # Shared object storage on the Storj S3 gateway (plain HTTP, IPv6-reachable).
+    # Shared object storage on the Storj S3 gateway (HTTPS, IPv6-reachable).
     # A single bucket "mimir" is shared by blocks + ruler via distinct
     # storage_prefix values (Mimir refuses the same bucket+prefix for both).
     common:
@@ -28,7 +28,6 @@ data:
         s3:
           endpoint: storj-gateway.home.garvey.sh:7777
           region: us-east-1
-          insecure: true
           access_key_id: ${GATEWAY_S3_ACCESS_KEY}
           secret_access_key: ${GATEWAY_S3_SECRET_KEY}
           bucket_name: mimir
